@@ -57,8 +57,13 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
     .register(network, new ExactEvmScheme());
 
   // Register Bazaar discovery extension so CDP catalogs these endpoints.
-  if (typeof resourceServer.registerExtension === "function") {
-    resourceServer.registerExtension(bazaarResourceServerExtension);
+  // Wrapped in try-catch: extension registration failure must not crash the server.
+  try {
+    if (typeof resourceServer.registerExtension === "function") {
+      resourceServer.registerExtension(bazaarResourceServerExtension);
+    }
+  } catch (e) {
+    console.warn("[x402] Bazaar extension registration skipped:", (e as Error).message);
   }
 
   const routes: Record<string, { accepts: unknown[]; description?: string }> = {};
