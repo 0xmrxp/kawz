@@ -122,11 +122,25 @@ app.use("*", async (c, next) => {
         const bazaarSchema = BAZAAR_ACCEPT_SCHEMAS[lookupPath];
         if (bazaarSchema) {
           if (!decoded.extensions) decoded.extensions = {};
-          decoded.extensions.bazaar = bazaarSchema;
+          // Merge — preserve category/tags/discoverable set by x402 middleware routes loop,
+          // then overlay info+schema from BAZAAR_ACCEPT_SCHEMAS for scanner compatibility.
+          const existingBazaar = decoded.extensions.bazaar;
+          decoded.extensions.bazaar = {
+            ...(existingBazaar && typeof existingBazaar === "object"
+              ? (existingBazaar as Record<string, unknown>)
+              : {}),
+            ...bazaarSchema,
+          };
           if (Array.isArray(decoded.accepts) && decoded.accepts.length > 0) {
             const accept = decoded.accepts[0] as Record<string, unknown>;
             if (!accept.extensions) accept.extensions = {};
-            (accept.extensions as Record<string, unknown>).bazaar = bazaarSchema;
+            const existingAcceptBazaar = (accept.extensions as Record<string, unknown>).bazaar;
+            (accept.extensions as Record<string, unknown>).bazaar = {
+              ...(existingAcceptBazaar && typeof existingAcceptBazaar === "object"
+                ? (existingAcceptBazaar as Record<string, unknown>)
+                : {}),
+              ...bazaarSchema,
+            };
           }
         }
 
