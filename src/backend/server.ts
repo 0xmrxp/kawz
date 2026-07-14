@@ -101,6 +101,7 @@ app.use("/v1/*", async (c, next) => {
 
         const headers = new Headers(c.res.headers);
         headers.set("content-type", "application/json");
+        headers.set("payment-required", btoa(JSON.stringify(decoded)));
         c.res = new Response(JSON.stringify(decoded), { status: 402, headers });
       } catch { /* leave {} body if decode fails */ }
     }

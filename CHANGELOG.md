@@ -10,6 +10,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.9.8-dev] — 2026-07-14 · Fix payment-required header tidak ditulis ulang setelah enrichment
+
+### Fixed
+- `server.ts` — tambah `headers.set("payment-required", btoa(JSON.stringify(decoded)))` di 402 interceptor.
+  **Root cause sesungguhnya**: interceptor meng-enrich `decoded` (tambah `resource.inputSchema` +
+  `accepts[i].extensions.bazaar.info.input.inputSchema`) lalu menulis ulang response BODY dengan data baru,
+  tapi header `payment-required` tidak pernah diupdate — masih berisi base64 lama dari `@x402/hono`
+  tanpa schema sama sekali.
+  x402scan dan mppscan membaca header `payment-required` (bukan body) saat probing, jadi semua enrichment
+  sebelumnya (BAZAAR_ACCEPT_SCHEMAS, bazaar extensions di route config) tidak terlihat scanner.
+  Fix: satu baris `headers.set("payment-required", btoa(...))` — header sekarang sinkron dengan body.
+
+---
+
 ## [0.9.7-dev] — 2026-07-14 · Fix inputSchema format untuk x402scan registration
 
 ### Fixed
