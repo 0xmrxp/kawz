@@ -32,7 +32,10 @@ export function createMppMiddleware(env: Env): MiddlewareHandler {
   // App-level wrapper: look up atomicUsdc amount for the request path,
   // then delegate to mppx.charge() which returns the per-route MiddlewareHandler.
   return async (c, next) => {
-    const pricing = ROUTE_PRICE_MAP[c.req.path];
+    // c.req.path is basePath-relative (/v1/...) but map keys are /api/v1/...
+    const rawPath = c.req.path;
+    const lookupPath = rawPath.startsWith("/v1/") ? `/api${rawPath}` : rawPath;
+    const pricing = ROUTE_PRICE_MAP[lookupPath];
     if (!pricing) return next(); // path not in price map → pass through
 
     // mppx.charge() returns a MiddlewareHandler — call it directly

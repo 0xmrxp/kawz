@@ -52,25 +52,29 @@ const ROUTE_INPUT_SCHEMAS: Record<string, unknown> = {
 // Bazaar accept schemas — injected into accepts[i].extensions.bazaar in 402 challenge.
 // @x402/hono strips custom fields from Accept items, so we post-process here.
 // Per x402scan DISCOVERY.md: input schema must be at accepts[].extensions.bazaar.{info,schema}.
-// Dual-requirement bazaar format (mirrors x402.ts BAZAAR_ACCEPT_SCHEMA):
-// - @x402/hono requires info.input.method
-// - x402scan reads extensions.bazaar.info.inputSchema from the live 402 challenge
+// Mirrors BAZAAR_ACCEPT_SCHEMA in x402.ts.
+// schema = JSON Schema describing the info structure (not example data).
+// x402scan reads schema.properties.input.properties.body/queryParams for input schema.
+const _SG    = { type: "object", properties: { input: { type: "object", properties: { type: { type: "string", const: "http" }, method: { type: "string", enum: ["GET","HEAD","DELETE"] } }, required: ["type","method"], additionalProperties: false } }, required: ["input"] };
+const _SGQP  = (qp: unknown) => ({ type: "object", properties: { input: { type: "object", properties: { type: { type: "string", const: "http" }, method: { type: "string", enum: ["GET","HEAD","DELETE"] }, queryParams: { type: "object", properties: qp as Record<string,unknown> } }, required: ["type","method"], additionalProperties: false } }, required: ["input"] });
+const _SP    = (body: unknown, req: string[]) => ({ type: "object", properties: { input: { type: "object", properties: { type: { type: "string", const: "http" }, method: { type: "string", enum: ["POST","PUT","PATCH"] }, bodyType: { type: "string", enum: ["json"] }, body: { type: "object", properties: body as Record<string,unknown>, required: req } }, required: ["type","method","bodyType","body"], additionalProperties: false } }, required: ["input"] });
+
 const BAZAAR_ACCEPT_SCHEMAS: Record<string, { info: unknown; schema: unknown }> = {
-  "/api/v1/trading/engine/vitals":            { info: { input: { type: "http", method: "GET" }, inputSchema: { type: "object", properties: {} } },                                                                                                                    schema: { type: "object", properties: {} } },
-  "/api/v1/trading/engine/orderbook-depth":   { info: { input: { type: "http", method: "GET" }, inputSchema: { type: "object", properties: { pair: { type: "string", description: "Trading pair, default BTC/USDT" } } } },                                           schema: { type: "object", properties: { pair: { type: "string" } } } },
-  "/api/v1/trading/engine/mev-risk-index":    { info: { input: { type: "http", method: "GET" }, inputSchema: { type: "object", properties: {} } },                                                                                                                    schema: { type: "object", properties: {} } },
-  "/api/v1/trading/engine/funding-rates":     { info: { input: { type: "http", method: "GET" }, inputSchema: { type: "object", properties: {} } },                                                                                                                    schema: { type: "object", properties: {} } },
-  "/api/v1/trading/engine/whale-tracker":     { info: { input: { type: "http", method: "GET" }, inputSchema: { type: "object", properties: {} } },                                                                                                                    schema: { type: "object", properties: {} } },
-  "/api/v1/coding/cache/dependency-tree":     { info: { input: { type: "http", method: "POST" }, inputSchema: { type: "object", required: ["code"], properties: { code: { type: "string" }, filename: { type: "string" } } } },                                        schema: { code: "import { Hono } from 'hono';", filename: "server.ts" } },
-  "/api/v1/coding/cache/token-compressor":    { info: { input: { type: "http", method: "POST" }, inputSchema: { type: "object", required: ["raw_code"], properties: { raw_code: { type: "string" } } } },                                                               schema: { raw_code: "const x = 1; // comment" } },
-  "/api/v1/coding/cache/syntax-heartbeat":    { info: { input: { type: "http", method: "POST" }, inputSchema: { type: "object", required: ["code"], properties: { code: { type: "string" } } } },                                                                      schema: { code: "const x = 1;" } },
-  "/api/v1/coding/cache/refactor-suggest":    { info: { input: { type: "http", method: "POST" }, inputSchema: { type: "object", required: ["code"], properties: { code: { type: "string" }, language: { type: "string" } } } },                                        schema: { code: "function add(a,b){return a+b}", language: "javascript" } },
-  "/api/v1/coding/cache/security-audit":      { info: { input: { type: "http", method: "POST" }, inputSchema: { type: "object", required: ["code"], properties: { code: { type: "string" }, language: { type: "string" } } } },                                        schema: { code: "db.query('SELECT * FROM users WHERE id='+req.id)", language: "javascript" } },
-  "/api/v1/analysis/memory/heartbeat":        { info: { input: { type: "http", method: "POST" }, inputSchema: { type: "object", required: ["text_a", "text_b"], properties: { text_a: { type: "string" }, text_b: { type: "string" } } } },                            schema: { text_a: "machine learning", text_b: "deep learning" } },
-  "/api/v1/analysis/memory/entity-extractor": { info: { input: { type: "http", method: "POST" }, inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" } } } },                                                                      schema: { text: "Satoshi Nakamoto published Bitcoin in 2008." } },
-  "/api/v1/analysis/memory/context-ranker":   { info: { input: { type: "http", method: "POST" }, inputSchema: { type: "object", required: ["query", "chunks"], properties: { query: { type: "string" }, chunks: { type: "array", items: { type: "string" } } } } },    schema: { query: "machine learning", chunks: ["deep learning", "spreadsheets"] } },
-  "/api/v1/analysis/memory/bias-detector":    { info: { input: { type: "http", method: "POST" }, inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" } } } },                                                                      schema: { text: "The radical policy will destroy the economy." } },
-  "/api/v1/analysis/memory/fact-linkage":     { info: { input: { type: "http", method: "POST" }, inputSchema: { type: "object", required: ["claim"], properties: { claim: { type: "string" }, language: { type: "string" } } } },                                      schema: { claim: "The moon landing was faked.", language: "en" } },
+  "/api/v1/trading/engine/vitals":            { info: { input: { type: "http", method: "GET" } },                                                                                            schema: _SG },
+  "/api/v1/trading/engine/orderbook-depth":   { info: { input: { type: "http", method: "GET", queryParams: { pair: "BTC/USDT" } } },                                                        schema: _SGQP({ pair: { type: "string", description: "Trading pair, default BTC/USDT" } }) },
+  "/api/v1/trading/engine/mev-risk-index":    { info: { input: { type: "http", method: "GET" } },                                                                                            schema: _SG },
+  "/api/v1/trading/engine/funding-rates":     { info: { input: { type: "http", method: "GET" } },                                                                                            schema: _SG },
+  "/api/v1/trading/engine/whale-tracker":     { info: { input: { type: "http", method: "GET" } },                                                                                            schema: _SG },
+  "/api/v1/coding/cache/dependency-tree":     { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "import { Hono } from 'hono';", filename: "server.ts" } } }, schema: _SP({ code: { type: "string" }, filename: { type: "string" } }, ["code"]) },
+  "/api/v1/coding/cache/token-compressor":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { raw_code: "const x = 1; // comment" } } },                         schema: _SP({ raw_code: { type: "string" } }, ["raw_code"]) },
+  "/api/v1/coding/cache/syntax-heartbeat":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "const x = 1;" } } },                                        schema: _SP({ code: { type: "string" } }, ["code"]) },
+  "/api/v1/coding/cache/refactor-suggest":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "function add(a,b){return a+b}", language: "javascript" } } }, schema: _SP({ code: { type: "string" }, language: { type: "string" } }, ["code"]) },
+  "/api/v1/coding/cache/security-audit":      { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "db.query('SELECT * FROM users WHERE id='+req.id)", language: "javascript" } } }, schema: _SP({ code: { type: "string" }, language: { type: "string" } }, ["code"]) },
+  "/api/v1/analysis/memory/heartbeat":        { info: { input: { type: "http", method: "POST", bodyType: "json", body: { text_a: "machine learning", text_b: "deep learning" } } },         schema: _SP({ text_a: { type: "string" }, text_b: { type: "string" } }, ["text_a","text_b"]) },
+  "/api/v1/analysis/memory/entity-extractor": { info: { input: { type: "http", method: "POST", bodyType: "json", body: { text: "Satoshi Nakamoto published Bitcoin in 2008." } } },          schema: _SP({ text: { type: "string" } }, ["text"]) },
+  "/api/v1/analysis/memory/context-ranker":   { info: { input: { type: "http", method: "POST", bodyType: "json", body: { query: "machine learning", chunks: ["deep learning","spreadsheets"] } } }, schema: _SP({ query: { type: "string" }, chunks: { type: "array", items: { type: "string" } } }, ["query","chunks"]) },
+  "/api/v1/analysis/memory/bias-detector":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { text: "The radical policy will destroy the economy." } } },         schema: _SP({ text: { type: "string" } }, ["text"]) },
+  "/api/v1/analysis/memory/fact-linkage":     { info: { input: { type: "http", method: "POST", bodyType: "json", body: { claim: "The moon landing was faked.", language: "en" } } },         schema: _SP({ claim: { type: "string" }, language: { type: "string" } }, ["claim"]) },
 };
 
 // Populate 402 response body, inject resource.inputSchema + accepts[].extensions.bazaar.
@@ -94,20 +98,27 @@ app.use("/v1/*", async (c, next) => {
           decoded.resource.inputSchema = inputSchema;
         }
 
-        // extensions.bazaar — top-level on PaymentRequired (x402 v2 spec).
-        // x402scan reads extensions.bazaar.info.inputSchema from the challenge.
-        // accepts[i].extensions does NOT exist in x402 v2 spec.
+        // extensions.bazaar — inject into both locations for maximum scanner compatibility:
+        // - decoded.extensions.bazaar       (x402 v2 top-level spec location)
+        // - decoded.accepts[0].extensions.bazaar  (some scanners check accepts-level)
         const bazaarSchema = BAZAAR_ACCEPT_SCHEMAS[lookupPath];
         if (bazaarSchema) {
           if (!decoded.extensions) decoded.extensions = {};
           decoded.extensions.bazaar = bazaarSchema;
+          if (Array.isArray(decoded.accepts) && decoded.accepts.length > 0) {
+            const accept = decoded.accepts[0] as Record<string, unknown>;
+            if (!accept.extensions) accept.extensions = {};
+            (accept.extensions as Record<string, unknown>).bazaar = bazaarSchema;
+          }
         }
 
         const headers = new Headers(c.res.headers);
         headers.set("content-type", "application/json");
         headers.set("payment-required", btoa(JSON.stringify(decoded)));
         c.res = new Response(JSON.stringify(decoded), { status: 402, headers });
-      } catch { /* leave {} body if decode fails */ }
+      } catch (err) {
+        console.error("[402-interceptor] failed to enrich challenge:", err);
+      }
     }
   }
 });
