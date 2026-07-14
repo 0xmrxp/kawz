@@ -145,8 +145,11 @@ app.use("*", async (c, next) => {
         }
 
         const headers = new Headers(c.res.headers);
+        const encoded = btoa(JSON.stringify(decoded));
         headers.set("content-type", "application/json");
-        headers.set("payment-required", btoa(JSON.stringify(decoded)));
+        headers.set("payment-required", encoded);
+        // Also set WWW-Authenticate for clients that expect x402 v1 challenge format
+        headers.set("WWW-Authenticate", `x402 ${encoded}`);
         c.res = new Response(JSON.stringify(decoded), { status: 402, headers });
       } catch (err) {
         console.error("[402-interceptor] failed to enrich challenge:", err);
@@ -173,10 +176,31 @@ const port = parseInt(env.PORT);
 
 console.log(`[lobre] listening on http://localhost:${port} (${env.ENVIRONMENT})`);
 
+// x402 payment discovery — required by agents before they attempt payment.
+// Lives outside the /api basePath so it's reachable at the standard well-known URL.
+const WELL_KNOWN_X402 = JSON.stringify({
+  version: 2,
+  schemes: ["exact"],
+  networks: ["eip155:8453"],
+  facilitator: "https://x402.org/facilitator",
+});
+
 // Rewrite http:// → https:// when Caddy signals the public request was HTTPS.
 // Required so @x402/hono builds the correct resource URL in the payment challenge
 // (Caddy terminates TLS and forwards internally via HTTP, so req.url is http://).
 function proxyFetch(req: Request): Response | Promise<Response> {
+  const url = new URL(req.url);
+
+  if (url.pathname === "/.well-known/x402.json") {
+    return new Response(WELL_KNOWN_X402, {
+      headers: {
+        "content-type": "application/json",
+        "access-control-allow-origin": "*",
+        "cache-control": "public, max-age=300",
+      },
+    });
+  }
+
   if (req.headers.get("x-forwarded-proto") === "https" && req.url.startsWith("http://")) {
     req = new Request(req.url.replace(/^http:\/\//, "https://"), req);
   }

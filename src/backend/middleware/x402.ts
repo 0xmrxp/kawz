@@ -157,7 +157,11 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
     const bazaarBase = BAZAAR_ACCEPT_SCHEMA[path];
     const bazaarMeta = BAZAAR_META[path];
 
-    routes[`${method} ${path}`] = {
+    // paymentMiddleware matches against c.req.path which is basePath-relative (/v1/...)
+    // inside an app with .basePath("/api"). Strip the /api prefix so routes match correctly.
+    const routePath = path.replace(/^\/api/, "");
+
+    routes[`${method} ${routePath}`] = {
       accepts: [{
         payTo:   env.EVM_PAYEE_ADDRESS,
         scheme:  "exact",
