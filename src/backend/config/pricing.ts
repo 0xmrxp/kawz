@@ -4,21 +4,24 @@ export interface EndpointPrice {
 }
 
 export const PRICING: Record<string, EndpointPrice> = {
-  "trading.vitals":             { usdAmount: "0.002000", atomicUsdc: "2000" },
-  "trading.orderbookDepth":     { usdAmount: "0.005000", atomicUsdc: "5000" },
-  "trading.mevRiskIndex":       { usdAmount: "0.004000", atomicUsdc: "4000" },
-  "trading.fundingRates":       { usdAmount: "0.002000", atomicUsdc: "2000" },
-  "trading.whaleTracker":       { usdAmount: "0.008000", atomicUsdc: "8000" },
-  "coding.dependencyTree":      { usdAmount: "0.003000", atomicUsdc: "3000" },
-  "coding.tokenCompressor":     { usdAmount: "0.002000", atomicUsdc: "2000" },
-  "coding.syntaxHeartbeat":     { usdAmount: "0.002000", atomicUsdc: "2000" },
-  "coding.refactorSuggest":     { usdAmount: "0.005000", atomicUsdc: "5000" },
-  "coding.securityAudit":       { usdAmount: "0.006000", atomicUsdc: "6000" },
-  "analysis.heartbeat":         { usdAmount: "0.003000", atomicUsdc: "3000" },
-  "analysis.entityExtractor":   { usdAmount: "0.006000", atomicUsdc: "6000" },
-  "analysis.contextRanker":     { usdAmount: "0.005000", atomicUsdc: "5000" },
-  "analysis.biasDetector":      { usdAmount: "0.005000", atomicUsdc: "5000" },
-  "analysis.factLinkage":       { usdAmount: "0.012000", atomicUsdc: "12000" },
+  // Trading Intelligence — minimum $0.030 (raised from $0.002–$0.008)
+  "trading.vitals":             { usdAmount: "0.030000", atomicUsdc: "30000" },
+  "trading.orderbookDepth":     { usdAmount: "0.050000", atomicUsdc: "50000" },
+  "trading.mevRiskIndex":       { usdAmount: "0.040000", atomicUsdc: "40000" },
+  "trading.fundingRates":       { usdAmount: "0.030000", atomicUsdc: "30000" },
+  "trading.whaleTracker":       { usdAmount: "0.080000", atomicUsdc: "80000" },
+  // Coding Cache — minimum $0.030 (raised from $0.002–$0.006)
+  "coding.dependencyTree":      { usdAmount: "0.030000", atomicUsdc: "30000" },
+  "coding.tokenCompressor":     { usdAmount: "0.030000", atomicUsdc: "30000" },
+  "coding.syntaxHeartbeat":     { usdAmount: "0.030000", atomicUsdc: "30000" },
+  "coding.refactorSuggest":     { usdAmount: "0.050000", atomicUsdc: "50000" },
+  "coding.securityAudit":       { usdAmount: "0.060000", atomicUsdc: "60000" },
+  // Research Pruner — minimum $0.030 (raised from $0.003–$0.012)
+  "analysis.heartbeat":         { usdAmount: "0.030000", atomicUsdc: "30000" },
+  "analysis.entityExtractor":   { usdAmount: "0.060000", atomicUsdc: "60000" },
+  "analysis.contextRanker":     { usdAmount: "0.050000", atomicUsdc: "50000" },
+  "analysis.biasDetector":      { usdAmount: "0.050000", atomicUsdc: "50000" },
+  "analysis.factLinkage":       { usdAmount: "0.120000", atomicUsdc: "120000" },
 };
 
 // Route path → pricing key map — used by payment middleware in server.ts

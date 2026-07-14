@@ -36,25 +36,25 @@ WORKFLOW:
 3. mcp__agentcash__fetch(url="<endpoint>", method="GET"|"POST", body={...}) — execute.
 
 TRADING INTELLIGENCE — GET, no body:
-  https://lobre.lat/api/v1/trading/engine/vitals           $0.002  BTC/ETH live price, 24h change, volume
-  https://lobre.lat/api/v1/trading/engine/orderbook-depth  $0.005  Bids/asks, spread, imbalance — ?pair=ETH/USDT to change pair
-  https://lobre.lat/api/v1/trading/engine/mev-risk-index   $0.004  MEV sandwich risk score 0–100 for current Base block
-  https://lobre.lat/api/v1/trading/engine/funding-rates    $0.002  BTC/ETH/SOL perpetual futures funding rates from Binance
-  https://lobre.lat/api/v1/trading/engine/whale-tracker    $0.008  USDC transfers on Base above $500K (Blockscout)
+  https://lobre.lat/api/v1/trading/engine/vitals           $0.030  BTC/ETH live price, 24h change, volume
+  https://lobre.lat/api/v1/trading/engine/orderbook-depth  $0.050  Bids/asks, spread, imbalance — ?pair=ETH/USDT to change pair
+  https://lobre.lat/api/v1/trading/engine/mev-risk-index   $0.040  MEV sandwich risk score 0–100 for current Base block
+  https://lobre.lat/api/v1/trading/engine/funding-rates    $0.030  BTC/ETH/SOL perpetual futures funding rates from Binance
+  https://lobre.lat/api/v1/trading/engine/whale-tracker    $0.080  USDC transfers on Base above $500K (Blockscout)
 
 CODING CACHE — POST, send JSON body:
-  https://lobre.lat/api/v1/coding/cache/dependency-tree    $0.003  body: { "code": "...", "filename": "app.ts" }
-  https://lobre.lat/api/v1/coding/cache/token-compressor   $0.002  body: { "raw_code": "..." }
-  https://lobre.lat/api/v1/coding/cache/syntax-heartbeat   $0.002  body: { "code": "..." }
-  https://lobre.lat/api/v1/coding/cache/refactor-suggest   $0.005  body: { "code": "...", "language": "typescript" }
-  https://lobre.lat/api/v1/coding/cache/security-audit     $0.006  body: { "code": "...", "language": "typescript" }
+  https://lobre.lat/api/v1/coding/cache/dependency-tree    $0.030  body: { "code": "...", "filename": "app.ts" }
+  https://lobre.lat/api/v1/coding/cache/token-compressor   $0.030  body: { "raw_code": "..." }
+  https://lobre.lat/api/v1/coding/cache/syntax-heartbeat   $0.030  body: { "code": "..." }
+  https://lobre.lat/api/v1/coding/cache/refactor-suggest   $0.050  body: { "code": "...", "language": "typescript" }
+  https://lobre.lat/api/v1/coding/cache/security-audit     $0.060  body: { "code": "...", "language": "typescript" }
 
 RESEARCH PRUNER — POST, send JSON body:
-  https://lobre.lat/api/v1/analysis/memory/heartbeat         $0.003  body: { "text_a": "...", "text_b": "..." }
-  https://lobre.lat/api/v1/analysis/memory/entity-extractor  $0.006  body: { "text": "..." }
-  https://lobre.lat/api/v1/analysis/memory/context-ranker    $0.005  body: { "query": "...", "chunks": ["...", "..."] }
-  https://lobre.lat/api/v1/analysis/memory/bias-detector     $0.005  body: { "text": "..." }
-  https://lobre.lat/api/v1/analysis/memory/fact-linkage      $0.012  body: { "claim": "...", "language": "en" }
+  https://lobre.lat/api/v1/analysis/memory/heartbeat         $0.030  body: { "text_a": "...", "text_b": "..." }
+  https://lobre.lat/api/v1/analysis/memory/entity-extractor  $0.060  body: { "text": "..." }
+  https://lobre.lat/api/v1/analysis/memory/context-ranker    $0.050  body: { "query": "...", "chunks": ["...", "..."] }
+  https://lobre.lat/api/v1/analysis/memory/bias-detector     $0.050  body: { "text": "..." }
+  https://lobre.lat/api/v1/analysis/memory/fact-linkage      $0.120  body: { "claim": "...", "language": "en" }
 
 RESPONSE FORMAT:
   200: { "success": true, "bundle": "trading_engine"|"coding_cache"|"live_vector_pruner", "data": {...} }
@@ -87,94 +87,94 @@ All 15 tools mirror the REST endpoints. AgentCash handles payment via MCP automa
 
 ## Endpoints
 
-### Bundle 1 — Trading Intelligence (from $0.002)
+### Bundle 1 — Trading Intelligence (from $0.030)
 
 GET  /api/v1/trading/engine/vitals
-  price: $0.002
+  price: $0.030
   desc:  Live BTC/ETH price, 24h change, volume. Binance primary, CoinGecko fallback.
   cache: 10s Redis
 
 GET  /api/v1/trading/engine/orderbook-depth
-  price:  $0.005
+  price:  $0.050
   desc:   Binance orderbook bids/asks, spread, imbalance.
   params: ?pair=ETH/USDT (default: BTC/USDT)
   cache:  5s Redis
 
 GET  /api/v1/trading/engine/mev-risk-index
-  price: $0.004
+  price: $0.040
   desc:  MEV sandwich attack risk score 0–100 for current Base block.
          High-gas tx ratio + repeated-sender heuristics.
   cache: 30s Redis
 
 GET  /api/v1/trading/engine/funding-rates
-  price: $0.002
+  price: $0.030
   desc:  BTC/ETH/SOL perpetual futures funding rates from Binance.
          Includes annualized rate and next funding timestamp.
   cache: 15s Redis
 
 GET  /api/v1/trading/engine/whale-tracker
-  price: $0.008
+  price: $0.080
   desc:  USDC transfers on Base above $500K. Source: Blockscout (no API key).
   cache: 60s Redis
 
-### Bundle 2 — Coding Cache (from $0.002)
+### Bundle 2 — Coding Cache (from $0.030)
 
 POST /api/v1/coding/cache/dependency-tree
-  price: $0.003
+  price: $0.030
   body:  { "code": string, "filename"?: string }
   desc:  Import/export dependency graph via @babel/parser. Supports TS/JSX.
 
 POST /api/v1/coding/cache/token-compressor
-  price: $0.002
+  price: $0.030
   body:  { "raw_code": string }
   desc:  Strip comments and collapse whitespace. Returns compressed string + ratio_pct.
 
 POST /api/v1/coding/cache/syntax-heartbeat
-  price: $0.002
+  price: $0.030
   body:  { "code": string }
   desc:  JS/TS/JSX syntax validation. Returns errors with position hints.
 
 POST /api/v1/coding/cache/refactor-suggest
-  price: $0.005
+  price: $0.050
   body:  { "code": string, "language"?: string }
   desc:  LLM refactoring suggestions with severity: low|medium|high.
          Returns overall_quality: poor|fair|good|excellent.
 
 POST /api/v1/coding/cache/security-audit
-  price: $0.006
+  price: $0.060
   body:  { "code": string, "language"?: string }
   desc:  LLM vulnerability detection. Severity: low|medium|high|critical.
          Returns risk_score 0–100.
 
-### Bundle 3 — Research Pruner (from $0.003)
+### Bundle 3 — Research Pruner (from $0.030)
 
 POST /api/v1/analysis/memory/heartbeat
-  price: $0.003
+  price: $0.030
   body:  { "text_a": string, "text_b": string }
   desc:  Cosine similarity via BAAI/bge-base-en-v1.5 (768-dim, CPU on-device).
          Returns similarity 0–1 + interpretation: distinct|related|very similar.
 
 POST /api/v1/analysis/memory/entity-extractor
-  price: $0.006
+  price: $0.060
   body:  { "text": string }
   desc:  Named entity recognition via LLM.
          Types: PERSON|ORG|LOC|DATE|MONEY|PRODUCT|OTHER. Confidence: low|medium|high.
 
 POST /api/v1/analysis/memory/context-ranker
-  price: $0.005
+  price: $0.050
   body:  { "query": string, "chunks": string[] }
   desc:  Re-rank chunks by semantic relevance to query. BGE embeddings + cosine similarity.
          Returns ranked array with index + score.
 
 POST /api/v1/analysis/memory/bias-detector
-  price: $0.005
+  price: $0.050
   body:  { "text": string }
   desc:  Detect framing bias, sentiment slant, loaded language.
          Types: framing|sentiment|loaded_language|omission|selection.
          Returns bias_score 0–100.
 
 POST /api/v1/analysis/memory/fact-linkage
-  price: $0.012
+  price: $0.120
   body:  { "claim": string, "language"?: string }
   desc:  Google Fact Check Tools API (ClaimReview database) primary.
          Falls back to LLM analysis (assessment: likely_true|likely_false|misleading|unverifiable).

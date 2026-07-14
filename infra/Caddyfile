@@ -8,7 +8,7 @@ lobre.lat {
 	handle {
 		root * /opt/lobre/src/frontend/dist
 		file_server
-		try_files {path} /index.html
+		try_files {path} {path}/index.html /index.html
 	}
 }
 
