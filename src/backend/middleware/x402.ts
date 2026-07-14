@@ -74,6 +74,26 @@ const BAZAAR_META: Record<string, { category: string; tags: string[] }> = {
   "/api/v1/analysis/memory/fact-linkage":     { category: "ai-tools", tags: ["fact-check", "verification", "claims"] },
 };
 
+// Per x402scan DISCOVERY.md spec: input schema must be in accepts[].extensions.bazaar
+// Format: { info: { input: {...example} }, schema: { properties: {...}, required: [...] } }
+const BAZAAR_ACCEPT_SCHEMA: Record<string, { info: unknown; schema: unknown }> = {
+  "/api/v1/trading/engine/vitals":            { info: {}, schema: { type: "object", properties: {} } },
+  "/api/v1/trading/engine/orderbook-depth":   { info: { input: { pair: "BTC/USDT" } }, schema: { type: "object", properties: { pair: { type: "string", description: "Trading pair (default: BTC/USDT)" } } } },
+  "/api/v1/trading/engine/mev-risk-index":    { info: {}, schema: { type: "object", properties: {} } },
+  "/api/v1/trading/engine/funding-rates":     { info: {}, schema: { type: "object", properties: {} } },
+  "/api/v1/trading/engine/whale-tracker":     { info: {}, schema: { type: "object", properties: {} } },
+  "/api/v1/coding/cache/dependency-tree":     { info: { input: { code: "import { Hono } from 'hono';" } }, schema: { type: "object", required: ["code"], properties: { code: { type: "string" }, filename: { type: "string" } } } },
+  "/api/v1/coding/cache/token-compressor":    { info: { input: { raw_code: "const x = 1; // comment" } }, schema: { type: "object", required: ["raw_code"], properties: { raw_code: { type: "string" } } } },
+  "/api/v1/coding/cache/syntax-heartbeat":    { info: { input: { code: "const x = 1;" } }, schema: { type: "object", required: ["code"], properties: { code: { type: "string" } } } },
+  "/api/v1/coding/cache/refactor-suggest":    { info: { input: { code: "function add(a,b){return a+b}", language: "javascript" } }, schema: { type: "object", required: ["code"], properties: { code: { type: "string" }, language: { type: "string" } } } },
+  "/api/v1/coding/cache/security-audit":      { info: { input: { code: "db.query(`SELECT * FROM users WHERE id=${req.id}`)", language: "javascript" } }, schema: { type: "object", required: ["code"], properties: { code: { type: "string" }, language: { type: "string" } } } },
+  "/api/v1/analysis/memory/heartbeat":        { info: { input: { text_a: "machine learning", text_b: "deep learning" } }, schema: { type: "object", required: ["text_a", "text_b"], properties: { text_a: { type: "string" }, text_b: { type: "string" } } } },
+  "/api/v1/analysis/memory/entity-extractor": { info: { input: { text: "Satoshi Nakamoto published Bitcoin in 2008." } }, schema: { type: "object", required: ["text"], properties: { text: { type: "string" } } } },
+  "/api/v1/analysis/memory/context-ranker":   { info: { input: { query: "machine learning", chunks: ["deep learning", "spreadsheets"] } }, schema: { type: "object", required: ["query", "chunks"], properties: { query: { type: "string" }, chunks: { type: "array", items: { type: "string" } } } } },
+  "/api/v1/analysis/memory/bias-detector":    { info: { input: { text: "The radical policy will destroy the economy." } }, schema: { type: "object", required: ["text"], properties: { text: { type: "string" } } } },
+  "/api/v1/analysis/memory/fact-linkage":     { info: { input: { claim: "The moon landing was faked.", language: "en" } }, schema: { type: "object", required: ["claim"], properties: { claim: { type: "string" }, language: { type: "string" } } } },
+};
+
 const ROUTE_DESCRIPTIONS: Record<string, string> = {
   "/api/v1/trading/engine/vitals":            "Live BTC/ETH price, 24h change and volume from Binance.",
   "/api/v1/trading/engine/orderbook-depth":   "CEX orderbook bids/asks, spread and imbalance for a trading pair.",
@@ -124,12 +144,20 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
     const method  = methodForPath(path);
     const bazaar  = BAZAAR_META[path];
 
+    const acceptSchema = BAZAAR_ACCEPT_SCHEMA[path];
+
     routes[`${method} ${path}`] = {
       accepts: [{
         payTo:   env.EVM_PAYEE_ADDRESS,
         scheme:  "exact",
         price:   `$${pricing.usdAmount}`,
         network,
+        // x402scan/mppscan DISCOVERY.md spec: input schema inside accepts[].extensions.bazaar
+        ...(acceptSchema && {
+          extensions: {
+            bazaar: acceptSchema,
+          },
+        }),
       }],
       description: ROUTE_DESCRIPTIONS[path],
       mimeType: "application/json",
