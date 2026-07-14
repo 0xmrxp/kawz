@@ -152,20 +152,9 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
         scheme:  "exact",
         price:   `$${pricing.usdAmount}`,
         network,
-        // x402scan/mppscan DISCOVERY.md spec: input schema inside accepts[].extensions.bazaar
-        ...(acceptSchema && {
-          extensions: {
-            bazaar: acceptSchema,
-          },
-        }),
       }],
       description: ROUTE_DESCRIPTIONS[path],
       mimeType: "application/json",
-      ...(bazaar && {
-        extensions: {
-          bazaar: { discoverable: true, ...bazaar },
-        },
-      }),
     };
   }
 
