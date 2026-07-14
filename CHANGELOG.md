@@ -6,9 +6,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 ## [Unreleased]
-- Phase 9 remaining: isi CDP_API_KEY_ID + CDP_API_KEY_SECRET di .env VPS, GitHub Actions SSH deploy, smoke test USDC
-- Phase 10: registrasi x402scan + mppscan, Poncho marketplace
-- Known issue: 402 response body `{}` kosong — payment challenge requirements tidak terisi (investigasi)
+- GitHub Actions SSH deploy — tambah `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` di GitHub Secrets
+- Daftar ke x402scan: https://www.x402scan.com/resources/register
+- Daftar ke mppscan: https://www.mppscan.com/register
+- CDP Bazaar auto-index pending (crawler verifikasi `discoverable: true` setelah facilitator aktif)
+- L3_NOT_FOUND x15 — `[info]` severity, tidak blocking; tool-internal check yang tidak ter-expose mekanismenya
+
+---
+
+## [0.9.3-dev] — 2026-07-14 · CDP Auth Fix + Discovery Compliance + Docs Rewrite
+
+### Fixed
+- `middleware/x402.ts` — dua bug `@coinbase/x402 v0.3.0`:
+  1. `createCdpAuthHeaders()` tidak punya key `"supported"` → `getSupported()` kirim request tanpa `Authorization` → CDP 401
+  2. `createAuthHeader()` hardcode `requestMethod: "POST"` — `getSupported()` adalah GET request → JWT `uris` claim mismatch → CDP 401 meski header ada
+  **Fix**: `buildCdpAuthHeaders()` import `generateJwt` dari `@coinbase/cdp-sdk/auth` langsung, generate JWT dengan method yang benar per operasi (`GET` untuk `supported`, `POST` untuk `verify`/`settle`)
+- `server.ts` — trust `X-Forwarded-Proto` dari Caddy via `proxyFetch()` wrapper → `resource.url` di payment challenge sekarang `https://` bukan `http://`
+- `server.ts` — intercept 402 response, decode `payment-required` header (base64 x402 v2 JSON), isi response body (x402 v1 client compat)
+- `src/frontend/public/favicon.ico` — tambah favicon ke Astro public dir → `FAVICON_MISSING` warning resolved
+
+### Added
+- `routes/openapi.ts` — full response schemas (`content/application/json/schema`) untuk semua 15 endpoint; sesuai OpenAPI spec standard dan meningkatkan agent comprehension
+- `src/frontend/public/llms-full.txt` — dokumentasi per-endpoint (format llmstxt.org), served di `/llms-full.txt`
+- AgentCash/Poncho marketplace — origin terdaftar via `bunx agentcash add https://lobre.lat`, `"warnings": []`
+
+### Changed
+- `public/llms.txt` + `src/frontend/public/llms.txt` — rewrite penuh: system prompt section dengan `BEGIN/END` delimiters, inline request body specs per endpoint, MCP config, cache TTL info, payment protocol details
+- `src/frontend/src/pages/docs.astro` — rewrite penuh: tambah Getting Started (3-step CLI terminal box), System Prompt section (copyable block untuk agent config), MCP Integration section dengan config snippet; API reference tetap di bawah; docs tidak lagi duplikasi konten landing page
 
 ---
 

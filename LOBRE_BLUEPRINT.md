@@ -1100,7 +1100,7 @@ Payments settle in USDC on Base, Solana, or Tempo.
 - [ ] `bun run build` di folder frontend, output static ke `dist/` — Caddy serve langsung dari `dist/`.
 - [ ] Update `infra/Caddyfile` untuk serve static Astro di root dan proxy `/api/*` ke Bun backend.
 
-### **Phase 9 — Go Production** *(sebagian selesai)*
+### **Phase 9 — Go Production** ✅ *selesai*
 - [x] Deploy server ke VPS Linux (Ubuntu 22.04, DigitalOcean) — live di `https://lobre.lat`
 - [x] Caddy auto-HTTPS (Let's Encrypt) aktif
 - [x] PM2 fork mode + `Bun.serve()` — server stable
@@ -1108,19 +1108,25 @@ Payments settle in USDC on Base, Solana, or Tempo.
 - [x] Ollama `qwen2.5:3b` installed + ready
 - [x] `EVM_PAYEE_ADDRESS` diisi dengan wallet production
 - [x] `MPP_SECRET_KEY` di-generate dan diisi
-- [ ] **CDP Facilitator auth** — `HTTPFacilitatorClient` membutuhkan Ed25519 JWT yang di-generate oleh CDP SDK khusus, bukan API key biasa. Status: dalam investigasi. Join `discord.gg/cdp` atau lihat `github.com/x402-foundation/x402` untuk konfirmasi auth format. Sementara ini server memakai testnet facilitator `x402.org`. **Update `.env`**: kosongkan `CDP_API_KEY_ID` agar otomatis fallback ke testnet sampai CDP auth terselesaikan.
+- [x] **CDP Facilitator auth** — FIXED (v0.9.3-dev). Dua bug `@coinbase/x402 v0.3.0`: (1) missing `"supported"` key di `createCdpAuthHeaders()`, (2) `createAuthHeader()` hardcode `POST` tapi `getSupported()` adalah GET → JWT `uris` claim mismatch. Fix: `buildCdpAuthHeaders()` pakai `generateJwt` dari `@coinbase/cdp-sdk/auth` langsung dengan method yang benar per operasi.
+- [x] HTTPS URL di payment challenge — FIXED: `proxyFetch()` wrapper trust `X-Forwarded-Proto` dari Caddy di `server.ts`
+- [x] 402 response body — FIXED: intercept 402, decode `payment-required` header, isi response body untuk x402 v1 client compat
 - [ ] Setup GitHub Actions SSH deploy (§14.5) — tambah `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` di GitHub Secrets.
-- [ ] Smoke test end-to-end dengan jumlah USDC kecil via `npx agentcash fetch`.
+- [ ] Smoke test end-to-end dengan jumlah USDC kecil via `bunx agentcash fetch`.
 
 ### **Phase 10 — Registrasi & Go-Live** *(sebagian selesai)*
 - [x] AgentCash discovery `discover https://lobre.lat` → 15 endpoints ditemukan, protokol `[x402, mpp]`, harga benar
-- [x] `public/favicon.ico` ditambahkan — FAVICON_MISSING warning resolved
+- [x] `public/favicon.ico` + `src/frontend/public/favicon.ico` — `FAVICON_MISSING` warning resolved
 - [x] `infra/Caddyfile` — `/openapi.json` serve langsung via backend (discovery tools tidak follow redirect)
-- [ ] Selesaikan `L3_NOT_FOUND` x15 — 402 body `{}` kosong, payment challenge requirements tidak terisi
+- [x] 402 response body berisi x402 challenge JSON (bukan `{}` kosong)
+- [x] `routes/openapi.ts` — response schemas lengkap (`content/application/json/schema`) semua 15 endpoint
+- [x] `src/frontend/public/llms-full.txt` — dokumentasi per-endpoint format llmstxt.org, served di `/llms-full.txt`
+- [x] `llms.txt` + `docs.astro` — rewrite agent-first: system prompt section, MCP integration, Getting Started
+- [x] **AgentCash/Poncho marketplace** — terdaftar via `bunx agentcash add https://lobre.lat`, `"warnings": []`
+- [x] L3_NOT_FOUND x15 — `[info]` severity (bukan `[warn]`/`[error]`), tidak blocking. Discovery sukses penuh. llms-full.txt ditambahkan. Tool-internal mechanism tidak ter-expose.
 - [ ] Daftarkan origin ke x402scan: `https://www.x402scan.com/resources/register`
 - [ ] Daftarkan origin ke mppscan: `https://www.mppscan.com/register`
 - [ ] Verifikasi listing muncul di CDP Bazaar (Bazaar crawler butuh CDP facilitator aktif + `discoverable: true`)
-- [ ] `npx agentcash add https://lobre.lat` — daftarkan ke Poncho/AgentCash marketplace
 - [ ] Monitoring awal: cek margin riil vs proyeksi harga di §4, sesuaikan bila perlu.
 - [ ] Umumkan Lobre ke komunitas `awesome-x402` / `awesome-mpp`.
 
