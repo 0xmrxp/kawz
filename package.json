@@ -13,6 +13,7 @@
     "@babel/parser": "^7.27.0",
     "@hono/mcp": "^0.3.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@coinbase/x402": "^0.3.0",
     "@x402/evm": "^2.18.0",
     "@x402/extensions": "^2.18.0",
     "@x402/hono": "^2.18.0",
