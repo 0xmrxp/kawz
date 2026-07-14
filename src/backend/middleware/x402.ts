@@ -147,9 +147,11 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
     facilitatorClient = new HTTPFacilitatorClient({ url: TESTNET_FACILITATOR });
   }
 
+  // register() may not be chainable (returns void in some versions of @x402/hono).
+  // Separate the call so resourceServer is always the class instance, not undefined.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const resourceServer = (new x402ResourceServer(facilitatorClient) as any)
-    .register(network, new ExactEvmScheme());
+  const resourceServer = new x402ResourceServer(facilitatorClient) as any;
+  resourceServer.register(network, new ExactEvmScheme());
 
   const routes: Record<string, unknown> = {};
   for (const [path, pricing] of Object.entries(ROUTE_PRICE_MAP)) {
@@ -157,11 +159,11 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
     const bazaarBase = BAZAAR_ACCEPT_SCHEMA[path];
     const bazaarMeta = BAZAAR_META[path];
 
-    // paymentMiddleware matches against c.req.path which is basePath-relative (/v1/...)
-    // inside an app with .basePath("/api"). Strip the /api prefix so routes match correctly.
-    const routePath = path.replace(/^\/api/, "");
-
-    routes[`${method} ${routePath}`] = {
+    // Register both path formats — paymentMiddleware may use c.req.path (basePath-relative,
+    // /v1/...) or the full URL path (/api/v1/...) depending on @x402/hono internals.
+    // Registering both ensures one always matches regardless of which path is used.
+    const routePathShort = path.replace(/^\/api/, ""); // /v1/...
+    const routeConfig = {
       accepts: [{
         payTo:   env.EVM_PAYEE_ADDRESS,
         scheme:  "exact",
@@ -176,6 +178,9 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
         discoverable: true,
       }},
     };
+
+    routes[`${method} ${routePathShort}`] = routeConfig; // /v1/... (c.req.path, basePath-relative)
+    routes[`${method} ${path}`]           = routeConfig; // /api/v1/... (full URL pathname)
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
