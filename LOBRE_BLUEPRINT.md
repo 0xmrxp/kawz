@@ -1124,6 +1124,17 @@ Payments settle in USDC on Base, Solana, or Tempo.
 - [x] `llms.txt` + `docs.astro` — rewrite agent-first: system prompt section, MCP integration, Getting Started
 - [x] **AgentCash/Poncho marketplace** — terdaftar via `bunx agentcash add https://lobre.lat`, `"warnings": []`
 - [x] L3_NOT_FOUND x15 — `[info]` severity (bukan `[warn]`/`[error]`), tidak blocking. Discovery sukses penuh. llms-full.txt ditambahkan. Tool-internal mechanism tidak ter-expose.
+- [x] **mppscan** — terdaftar `https://lobre.lat`, 15 resources. MPP realm fix: `new URL(env.BASE_URL).host`. Warnings "input schema" `[not blocking]`; `accepts[].extensions.bazaar` sudah dipasang via 402 interceptor.
+- [x] **x402scan** — terdaftar `https://lobre.lat`, 15 resources. Warnings `[not blocking]`; `accepts[].extensions.bazaar.{info,schema}` injected.
+- [x] GitHub Actions CI/CD — auto-deploy setiap push ke `main`, bun PATH fix, pm2 reload by name. Status: hijau ✓
+- [x] Harga dinaikkan 10x minimum `$0.030` (dari `$0.002`). Pricing v2: Trading `$0.030–$0.080`, Coding `$0.030–$0.060`, Analysis `$0.030–$0.120`
+- [x] `infra/Caddyfile` — `try_files {path} {path}/index.html /index.html` (fix `/docs` fallback ke landing page)
+- [x] `docs.astro` — copy buttons di system prompt + MCP config, harga terupdate
+- [ ] Caddyfile manual update di VPS: `cp /opt/lobre/infra/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy`
+- [ ] Rescan di mppscan + x402scan setelah Caddyfile update
+- [ ] CDP Bazaar auto-index pending
+- [ ] Monitoring awal: cek margin riil vs proyeksi harga di §4, sesuaikan bila perlu.
+- [ ] Umumkan Lobre ke komunitas `awesome-x402` / `awesome-mpp`.
 - [ ] Daftarkan origin ke x402scan: `https://www.x402scan.com/resources/register`
 - [ ] Daftarkan origin ke mppscan: `https://www.mppscan.com/register`
 - [ ] Verifikasi listing muncul di CDP Bazaar (Bazaar crawler butuh CDP facilitator aktif + `discoverable: true`)

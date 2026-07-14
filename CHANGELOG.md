@@ -6,11 +6,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 ## [Unreleased]
-- GitHub Actions SSH deploy — tambah `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` di GitHub Secrets
-- Daftar ke x402scan: https://www.x402scan.com/resources/register
-- Daftar ke mppscan: https://www.mppscan.com/register
 - CDP Bazaar auto-index pending (crawler verifikasi `discoverable: true` setelah facilitator aktif)
-- L3_NOT_FOUND x15 — `[info]` severity, tidak blocking; tool-internal check yang tidak ter-expose mekanismenya
+- L3_NOT_FOUND x15 — `[info]` severity, tidak blocking
+- "Input schema is missing" x15 — `[warning]` di x402scan/mppscan, tidak blocking; `accepts[].extensions.bazaar` sudah dipasang
+
+---
+
+## [0.9.4-dev] — 2026-07-14 · Price Increase + Caddyfile Fix + Discovery Compliance
+
+### Changed
+- `pricing.ts` — semua 15 endpoint naik 10x, minimum `$0.030`:
+  Trading: `$0.030–$0.080`, Coding: `$0.030–$0.060`, Analysis: `$0.030–$0.120`
+- `infra/Caddyfile` — `try_files {path} /index.html` → `try_files {path} {path}/index.html /index.html`
+  Fix: `/docs` fallback ke landing page karena Caddy hanya cek `/docs` sebagai file, bukan directory dengan `index.html`
+- `docs.astro` — harga diperbarui, copy button di system prompt + MCP config block
+- `index.astro` — bundle "from" price diperbarui
+- `llms.txt` + `src/frontend/public/llms.txt` — semua harga diperbarui
+
+### Added
+- `server.ts` — `BAZAAR_ACCEPT_SCHEMAS` + inject `accepts[i].extensions.bazaar.{info,schema}` via 402 interceptor
+  Per x402scan/mppscan DISCOVERY.md: input schema harus di `accepts[].extensions.bazaar`, bukan top-level `extensions`
+- `x402.ts` — `BAZAAR_ACCEPT_SCHEMAS` map (15 entries) untuk CDP Bazaar Catalog compatibility
+- `middleware/mpp.ts` — `realm: new URL(env.BASE_URL).host` (hostname only) — fix "realm does not match origin host"
+
+### Fixed
+- `deploy.yml` — `bun --cwd src/frontend install` → `bun install --cwd src/frontend` (syntax fix)
+- `deploy.yml` — `export PATH="/root/.bun/bin"` untuk SSH non-interactive shell
+- `openapi.ts` — `parameters: []` di 4 GET endpoints tanpa params
+
+### Registration
+- mppscan: origin terdaftar dengan 15 resources, warnings `[not blocking]`
+- x402scan: origin terdaftar dengan 15 resources, warnings `[not blocking]`
+- GitHub Actions CI/CD: auto-deploy aktif setiap push ke `main`, hijau ✓
 
 ---
 
