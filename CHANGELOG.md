@@ -11,6 +11,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.8.1] — 2026-07-14 · LLM Abstraction — Ollama primary + Groq fallback
+
+### Added
+- `src/backend/lib/llm.ts` — unified LLM client: Ollama (`qwen2.5:3b` GGUF Q4_K_M) primary via OpenAI-compatible fetch, Groq cloud (`llama-3.3-70b-versatile`) fallback when Ollama unavailable
+
+### Changed
+- `src/backend/lib/groq.ts` → **deleted** (replaced by `lib/llm.ts`)
+- `src/backend/routes/coding.ts` — `/refactor-suggest` + `/security-audit` updated to `llmChat(getLLMConfig(env), ...)`; removed `GROQ_API_KEY` required check
+- `src/backend/routes/analysis.ts` — `/entity-extractor`, `/bias-detector`, `/fact-linkage` updated to `llmChat`; `source` field in fact-linkage LLM response renamed `"groq_llm"` → `"llm"`
+- `src/backend/routes/mcp.ts` — all 5 LLM tools updated to `llmChat`; removed Groq SDK import and `groq` singleton; replaced with `llm = getLLMConfig(env)`
+- `src/backend/types.ts` — added `LLM_BASE_URL: string` + `LLM_MODEL: string` to `Env` interface and `loadEnv()` (defaults: `http://localhost:11434`, `qwen2.5:3b`)
+- `.env.example` — added `LLM_BASE_URL`, `LLM_MODEL`; `GROQ_API_KEY` marked as optional cloud backup
+
+---
+
 ## [0.8.0] — 2026-07-14 · Phase 8 — Astro Frontend
 **Commit:** `25691f5`
 

@@ -6,7 +6,7 @@
 import { Hono } from "hono";
 import type { Variables } from "../types";
 import { embed, cosineSimilarity } from "../lib/embeddings";
-import { groqClient } from "../lib/groq";
+import { llmChat, getLLMConfig } from "../lib/llm";
 
 const analysis = new Hono<{ Variables: Variables }>();
 
@@ -47,14 +47,11 @@ analysis.post("/entity-extractor", async (c) => {
   const env = c.get("env");
   const body = await c.req.json<{ text?: string }>().catch(() => null);
   if (!body?.text) return c.json({ success: false, error: "'text' field required" }, 400);
-  if (!env.GROQ_API_KEY) return c.json({ success: false, error: "GROQ_API_KEY not configured" }, 503);
-
   try {
-    const completion = await groqClient(env.GROQ_API_KEY).chat.completions.create({
-      model:           "llama-3.3-70b-versatile",
-      temperature:     0.1,
-      max_tokens:      1024,
-      response_format: { type: "json_object" },
+    const content = await llmChat(getLLMConfig(env), {
+      temperature: 0.1,
+      maxTokens:   1024,
+      jsonOutput:  true,
       messages: [
         {
           role:    "system",
@@ -65,7 +62,7 @@ analysis.post("/entity-extractor", async (c) => {
         { role: "user", content: body.text.slice(0, 3000) },
       ],
     });
-    const data = JSON.parse(completion.choices[0].message.content ?? "{}");
+    const data = JSON.parse(content);
     return c.json({ success: true, bundle: "live_vector_pruner", data });
   } catch {
     return c.json({ success: false, error: "LLM inference failed" }, 503);
@@ -111,14 +108,11 @@ analysis.post("/bias-detector", async (c) => {
   const env = c.get("env");
   const body = await c.req.json<{ text?: string }>().catch(() => null);
   if (!body?.text) return c.json({ success: false, error: "'text' field required" }, 400);
-  if (!env.GROQ_API_KEY) return c.json({ success: false, error: "GROQ_API_KEY not configured" }, 503);
-
   try {
-    const completion = await groqClient(env.GROQ_API_KEY).chat.completions.create({
-      model:           "llama-3.3-70b-versatile",
-      temperature:     0.1,
-      max_tokens:      1024,
-      response_format: { type: "json_object" },
+    const content = await llmChat(getLLMConfig(env), {
+      temperature: 0.1,
+      maxTokens:   1024,
+      jsonOutput:  true,
       messages: [
         {
           role:    "system",
@@ -130,7 +124,7 @@ analysis.post("/bias-detector", async (c) => {
         { role: "user", content: body.text.slice(0, 3000) },
       ],
     });
-    const data = JSON.parse(completion.choices[0].message.content ?? "{}");
+    const data = JSON.parse(content);
     return c.json({ success: true, bundle: "live_vector_pruner", data });
   } catch {
     return c.json({ success: false, error: "LLM inference failed" }, 503);
@@ -191,17 +185,12 @@ analysis.post("/fact-linkage", async (c) => {
     }
   }
 
-  // Groq fallback — LLM grounding analysis
-  if (!env.GROQ_API_KEY) {
-    return c.json({ success: false, error: "Neither GOOGLE_FACTCHECK_API_KEY nor GROQ_API_KEY configured" }, 503);
-  }
-
+  // LLM fallback — Ollama primary, Groq backup
   try {
-    const completion = await groqClient(env.GROQ_API_KEY).chat.completions.create({
-      model:           "llama-3.3-70b-versatile",
-      temperature:     0.1,
-      max_tokens:      1024,
-      response_format: { type: "json_object" },
+    const content = await llmChat(getLLMConfig(env), {
+      temperature: 0.1,
+      maxTokens:   1024,
+      jsonOutput:  true,
       messages: [
         {
           role:    "system",
@@ -214,11 +203,11 @@ analysis.post("/fact-linkage", async (c) => {
         { role: "user", content: `Claim: ${body.claim.slice(0, 1000)}` },
       ],
     });
-    const data = JSON.parse(completion.choices[0].message.content ?? "{}");
+    const data = JSON.parse(content);
     return c.json({
       success: true,
       bundle: "live_vector_pruner",
-      data: { source: "groq_llm", ...data, timestamp: Date.now() },
+      data: { source: "llm", ...data, timestamp: Date.now() },
     });
   } catch {
     return c.json({ success: false, error: "LLM inference failed" }, 503);

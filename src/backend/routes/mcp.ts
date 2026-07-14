@@ -7,10 +7,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import { z } from "zod";
 import { binance as Binance } from "ccxt";
-import Groq from "groq-sdk";
 import type { Variables, Env } from "../types";
 import { embed, cosineSimilarity } from "../lib/embeddings";
 import { buildDependencyTree, checkSyntax, compressTokens } from "../lib/ast-parser";
+import { llmChat, getLLMConfig } from "../lib/llm";
 
 const mcp = new Hono<{ Variables: Variables }>();
 
@@ -21,7 +21,7 @@ function buildMcpServer(env: Env): McpServer {
   const server   = new McpServer({ name: "lobre", version: "1.0.0" });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const exchange = new (Binance as any)({ enableRateLimit: true }) as InstanceType<typeof Binance>;
-  const groq     = env.GROQ_API_KEY ? new Groq({ apiKey: env.GROQ_API_KEY }) : null;
+  const llm      = getLLMConfig(env);
 
   // ── Trading Bundle ────────────────────────────────────────────────────────
 
@@ -103,17 +103,15 @@ function buildMcpServer(env: Env): McpServer {
   server.tool("coding-refactor-suggest", "LLM-powered refactoring suggestions",
     { code: z.string(), language: z.string().optional().default("typescript") },
     async ({ code, language }) => {
-      if (!groq) return err("GROQ_API_KEY not configured");
       try {
-        const completion = await groq.chat.completions.create({
-          model: "llama-3.3-70b-versatile", temperature: 0.2, max_tokens: 1024,
-          response_format: { type: "json_object" },
+        const content = await llmChat(llm, {
+          temperature: 0.2, maxTokens: 1024, jsonOutput: true,
           messages: [
             { role: "system", content: 'Return ONLY valid JSON: {"suggestions":[{"type":string,"line_hint":number|null,"description":string,"severity":"low"|"medium"|"high"}],"overall_quality":string}' },
             { role: "user", content: `Language: ${language}\n\n${code.slice(0, 4000)}` },
           ],
         });
-        return ok(JSON.parse(completion.choices[0].message.content ?? "{}"));
+        return ok(JSON.parse(content));
       } catch { return err("LLM inference failed"); }
     }
   );
@@ -121,17 +119,15 @@ function buildMcpServer(env: Env): McpServer {
   server.tool("coding-security-audit", "Static security audit via LLM",
     { code: z.string(), language: z.string().optional().default("typescript") },
     async ({ code, language }) => {
-      if (!groq) return err("GROQ_API_KEY not configured");
       try {
-        const completion = await groq.chat.completions.create({
-          model: "llama-3.3-70b-versatile", temperature: 0.1, max_tokens: 1024,
-          response_format: { type: "json_object" },
+        const content = await llmChat(llm, {
+          temperature: 0.1, maxTokens: 1024, jsonOutput: true,
           messages: [
             { role: "system", content: 'Return ONLY valid JSON: {"vulnerabilities":[{"id":string,"severity":string,"title":string,"description":string,"recommendation":string}],"risk_score":number}' },
             { role: "user", content: `Language: ${language}\n\n${code.slice(0, 4000)}` },
           ],
         });
-        return ok(JSON.parse(completion.choices[0].message.content ?? "{}"));
+        return ok(JSON.parse(content));
       } catch { return err("LLM inference failed"); }
     }
   );
@@ -152,17 +148,15 @@ function buildMcpServer(env: Env): McpServer {
   server.tool("analysis-entity-extractor", "Extract named entities from unstructured text",
     { text: z.string() },
     async ({ text }) => {
-      if (!groq) return err("GROQ_API_KEY not configured");
       try {
-        const c = await groq.chat.completions.create({
-          model: "llama-3.3-70b-versatile", temperature: 0.1, max_tokens: 1024,
-          response_format: { type: "json_object" },
+        const content = await llmChat(llm, {
+          temperature: 0.1, maxTokens: 1024, jsonOutput: true,
           messages: [
             { role: "system", content: 'Return ONLY valid JSON: {"entities":[{"text":string,"type":string,"confidence":string}],"entity_count":number}' },
             { role: "user", content: text.slice(0, 3000) },
           ],
         });
-        return ok(JSON.parse(c.choices[0].message.content ?? "{}"));
+        return ok(JSON.parse(content));
       } catch { return err("LLM inference failed"); }
     }
   );
@@ -183,22 +177,20 @@ function buildMcpServer(env: Env): McpServer {
   server.tool("analysis-bias-detector", "Detect framing bias and loaded language in text",
     { text: z.string() },
     async ({ text }) => {
-      if (!groq) return err("GROQ_API_KEY not configured");
       try {
-        const c = await groq.chat.completions.create({
-          model: "llama-3.3-70b-versatile", temperature: 0.1, max_tokens: 1024,
-          response_format: { type: "json_object" },
+        const content = await llmChat(llm, {
+          temperature: 0.1, maxTokens: 1024, jsonOutput: true,
           messages: [
             { role: "system", content: 'Return ONLY valid JSON: {"bias_detected":boolean,"bias_types":[],"confidence":string,"bias_score":number,"summary":string}' },
             { role: "user", content: text.slice(0, 3000) },
           ],
         });
-        return ok(JSON.parse(c.choices[0].message.content ?? "{}"));
+        return ok(JSON.parse(content));
       } catch { return err("LLM inference failed"); }
     }
   );
 
-  server.tool("analysis-fact-linkage", "Verify a claim via Google Fact Check API or Groq LLM",
+  server.tool("analysis-fact-linkage", "Verify a claim via Google Fact Check API or LLM",
     { claim: z.string(), language: z.string().optional().default("en") },
     async ({ claim, language }) => {
       if (env.GOOGLE_FACTCHECK_API_KEY) {
@@ -209,17 +201,15 @@ function buildMcpServer(env: Env): McpServer {
           if (json.claims?.length) return ok({ source: "google_factcheck", claims: json.claims.slice(0, 3) });
         } catch { /* fall through */ }
       }
-      if (!groq) return err("Neither GOOGLE_FACTCHECK_API_KEY nor GROQ_API_KEY configured");
       try {
-        const c = await groq.chat.completions.create({
-          model: "llama-3.3-70b-versatile", temperature: 0.1, max_tokens: 512,
-          response_format: { type: "json_object" },
+        const content = await llmChat(llm, {
+          temperature: 0.1, maxTokens: 512, jsonOutput: true,
           messages: [
             { role: "system", content: 'Return ONLY valid JSON: {"assessment":string,"confidence":string,"reasoning":string}' },
             { role: "user", content: `Claim: ${claim.slice(0, 1000)}` },
           ],
         });
-        return ok({ source: "groq_llm", ...JSON.parse(c.choices[0].message.content ?? "{}") });
+        return ok({ source: "llm", ...JSON.parse(content) });
       } catch { return err("LLM inference failed"); }
     }
   );

@@ -4,7 +4,7 @@
 import { Hono } from "hono";
 import type { Variables } from "../types";
 import { buildDependencyTree, checkSyntax, compressTokens } from "../lib/ast-parser";
-import { groqClient } from "../lib/groq";
+import { llmChat, getLLMConfig } from "../lib/llm";
 
 const coding = new Hono<{ Variables: Variables }>();
 
@@ -54,16 +54,11 @@ coding.post("/refactor-suggest", async (c) => {
   const body = await c.req.json<{ code?: string; language?: string }>().catch(() => null);
   if (!body?.code) return c.json({ success: false, error: "'code' field required" }, 400);
 
-  if (!env.GROQ_API_KEY) {
-    return c.json({ success: false, error: "GROQ_API_KEY not configured" }, 503);
-  }
-
   try {
-    const completion = await groqClient(env.GROQ_API_KEY).chat.completions.create({
-      model:           "llama-3.3-70b-versatile",
-      temperature:     0.2,
-      max_tokens:      1024,
-      response_format: { type: "json_object" },
+    const content = await llmChat(getLLMConfig(env), {
+      temperature: 0.2,
+      maxTokens:   1024,
+      jsonOutput:  true,
       messages: [
         {
           role:    "system",
@@ -77,7 +72,7 @@ coding.post("/refactor-suggest", async (c) => {
         },
       ],
     });
-    const data = JSON.parse(completion.choices[0].message.content ?? "{}");
+    const data = JSON.parse(content);
     return c.json({ success: true, bundle: "coding_cache", data });
   } catch {
     return c.json({ success: false, error: "LLM inference failed" }, 503);
@@ -91,16 +86,11 @@ coding.post("/security-audit", async (c) => {
   const body = await c.req.json<{ code?: string; language?: string }>().catch(() => null);
   if (!body?.code) return c.json({ success: false, error: "'code' field required" }, 400);
 
-  if (!env.GROQ_API_KEY) {
-    return c.json({ success: false, error: "GROQ_API_KEY not configured" }, 503);
-  }
-
   try {
-    const completion = await groqClient(env.GROQ_API_KEY).chat.completions.create({
-      model:           "llama-3.3-70b-versatile",
-      temperature:     0.1,
-      max_tokens:      1024,
-      response_format: { type: "json_object" },
+    const content = await llmChat(getLLMConfig(env), {
+      temperature: 0.1,
+      maxTokens:   1024,
+      jsonOutput:  true,
       messages: [
         {
           role:    "system",
@@ -115,7 +105,7 @@ coding.post("/security-audit", async (c) => {
         },
       ],
     });
-    const data = JSON.parse(completion.choices[0].message.content ?? "{}");
+    const data = JSON.parse(content);
     return c.json({ success: true, bundle: "coding_cache", data });
   } catch {
     return c.json({ success: false, error: "LLM inference failed" }, 503);

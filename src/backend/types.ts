@@ -15,8 +15,11 @@ export interface Env {
   // On-chain data sources (optional — sensible public defaults provided)
   BLOCKSCOUT_BASE_URL: string;
   BASE_RPC_URL: string;
-  // Google Fact Check Tools API key (free, optional — fallback to Groq if empty)
+  // Google Fact Check Tools API key (free, optional — fallback to LLM if empty)
   GOOGLE_FACTCHECK_API_KEY: string;
+  // Ollama self-hosted LLM (primary inference engine)
+  LLM_BASE_URL: string;   // e.g. "http://localhost:11434"
+  LLM_MODEL:    string;   // e.g. "qwen2.5:3b"
 }
 
 // Hono Variables type — injected via app.use("*") in server.ts
@@ -53,5 +56,7 @@ export function loadEnv(): Env {
     BLOCKSCOUT_BASE_URL: process.env.BLOCKSCOUT_BASE_URL ?? "https://base.blockscout.com",
     BASE_RPC_URL: process.env.BASE_RPC_URL ?? "https://mainnet.base.org",
     GOOGLE_FACTCHECK_API_KEY: process.env.GOOGLE_FACTCHECK_API_KEY ?? "",
+    LLM_BASE_URL: process.env.LLM_BASE_URL ?? "http://localhost:11434",
+    LLM_MODEL:    process.env.LLM_MODEL    ?? "qwen2.5:3b",
   };
 }

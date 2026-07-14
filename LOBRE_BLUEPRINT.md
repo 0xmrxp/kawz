@@ -68,7 +68,7 @@
 | **Payment — MPP** | `mppx` / `mppx/hono` (Tempo settlement) | Tidak berubah |
 | **Data Cache** | **Redis** (self-hosted di VPS, `ioredis`) | Menggantikan Cloudflare KV; API hampir identik untuk pola cache-aside |
 | **Data CEX** | **CCXT** (full import, tidak ada bundle size limit di VPS) | Di VPS tidak ada limit 1MB/10MB seperti Workers — `import ccxt from 'ccxt'` aman |
-| **AI Inference — LLM** | **Groq API** (`groq-sdk`, model `llama-3.3-70b-versatile`) | Free tier: 14.400 req/hari, 6.000 tokens/menit — cukup untuk MVP |
+| **AI Inference — LLM** | **Ollama** (self-hosted, `Qwen2.5-3B-Instruct` GGUF Q4_K_M, ~2 GB RAM) **+ Groq API** (cloud fallback, `llama-3.3-70b-versatile`) | Ollama jalan di CPU lokal VPS, tanpa API key, nol biaya; Groq fallback otomatis jika Ollama down (`GROQ_API_KEY` opsional) |
 | **AI Inference — Embedding** | **`@xenova/transformers`** (model `BAAI/bge-base-en-v1.5`) | Jalan di CPU lokal, tanpa API key, tanpa biaya eksternal — cocok untuk VPS |
 | **Vector DB** | **Qdrant** (Docker, self-hosted di VPS) | Gratis penuh, gRPC + REST API, high-performance |
 | **Frontend** | **Astro v4 + Tailwind CSS v4** (statis, SEO 100/100) | Build output disajikan sebagai static files via Caddy |
@@ -572,7 +572,7 @@ Tidak butuh API eksternal sama sekali:
 ### 7.3 Bundle 3 — Live Vector Pruner / Analysis
 
 - `heartbeat` (cosine similarity) → **`@xenova/transformers`** jalan lokal di VPS: load model `BAAI/bge-base-en-v1.5` sekali saat startup (model ~400MB, cached di disk), generate embedding di CPU, hitung cosine similarity manual. Tanpa API key, tanpa biaya eksternal, latensi ~50-150ms di CPU VPS standar.
-- `entity-extractor`, `bias-detector` → **Groq API** (`groq-sdk`, model `llama-3.3-70b-versatile`): output JSON terstruktur via `response_format: { type: "json_object" }`. Free tier: 14.400 req/hari, 6.000 tokens/menit — cukup untuk MVP.
+- `entity-extractor`, `bias-detector` → **Ollama** (`lib/llm.ts`, model `qwen2.5:3b` GGUF Q4_K_M): output JSON terstruktur via `response_format: { type: "json_object" }`. Jalan di CPU lokal VPS, tanpa API key. Groq cloud (`llama-3.3-70b-versatile`) otomatis jadi fallback jika Ollama tidak tersedia.
 - `context-ranker` → kombinasi bge embedding (`@xenova/transformers`) + **Qdrant** (self-hosted Docker di VPS, REST API port 6333). Qdrant gratis penuh, tidak ada kuota.
 - `fact-linkage` → **Google Fact Check Tools API** (gratis, API key Google Cloud, database ClaimReview global) sebagai sumber utama. Keterbatasan: hanya klaim yang **sudah pernah** di-fact-check manusia — untuk klaim baru, fallback ke Groq LLM + grounding search. Tetap endpoint termahal ($0.012) karena gabungan external API call + LLM inference.
 
@@ -731,7 +731,8 @@ Semua angka di bawah sudah divalidasi langsung ke dokumentasi resmi masing-masin
 
 | Layanan | Free Tier | Catatan |
 |---|---|---|
-| **Groq API** (LLM inference) | **14.400 req/hari, 6.000 tokens/menit** | Cukup untuk MVP; upgrade ke Dev ($0.05/1M token) kalau traffic naik |
+| **Ollama** (LLM inference, primary) | **Gratis penuh** — jalan di CPU lokal VPS | Install: `curl -fsSL https://ollama.com/install.sh \| sh` + `ollama pull qwen2.5:3b`; ~2 GB RAM, ~50–200 ms per inferensi di 4 vCPU |
+| **Groq API** (LLM cloud fallback) | Free tier: 14.400 req/hari, 6.000 tokens/menit | Opsional — hanya dipakai jika Ollama down; set `GROQ_API_KEY` di `.env` |
 | CDP Facilitator (x402) | 1.000 transaksi gratis/bulan, lalu $0.001/transaksi | Berlaku resmi sejak 1 Jan 2026 |
 | CoinGecko API | Demo plan: 100 calls/menit, 10.000 calls/bulan | Upgrade $35/bulan kalau traffic ramai |
 | GeckoTerminal API | Gratis, 10 calls/menit | Dari tim CoinGecko, 1.900+ DEX |
@@ -768,7 +769,13 @@ PORT=3000
 # Redis (self-hosted via docker-compose di VPS)
 REDIS_URL=redis://localhost:6379
 
-# Groq API (LLM inference untuk Bundle 3)
+# Ollama (self-hosted LLM — primary inference engine)
+# Install: curl -fsSL https://ollama.com/install.sh | sh
+# Pull:    ollama pull qwen2.5:3b
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=qwen2.5:3b
+
+# Groq API (cloud fallback jika Ollama down — opsional)
 GROQ_API_KEY=                  # dari console.groq.com
 
 # Qdrant (self-hosted via docker-compose di VPS)

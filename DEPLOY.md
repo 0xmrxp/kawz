@@ -6,10 +6,11 @@ Step-by-step commands untuk deploy Lobre ke VPS Linux (Ubuntu 22.04 LTS).
 
 ## Prerequisites
 
-- VPS dengan Ubuntu 22.04 LTS (min. 1 vCPU, 2 GB RAM)
+- VPS dengan Ubuntu 22.04 LTS (min. **4 vCPU, 8 GB RAM** — dibutuhkan untuk Ollama + Redis + Qdrant + Bun)
 - Domain `lobre.lat` dengan DNS A record sudah mengarah ke IP VPS
 - GitHub repo: `github.com/0xmrxp/kawz`
-- Akun/keys yang sudah disiapkan: Groq API, EVM wallet, CDP API (untuk prod)
+- Akun/keys yang sudah disiapkan: EVM wallet, CDP API (untuk prod)
+- Groq API key opsional — hanya sebagai cloud fallback jika Ollama down
 
 ---
 
@@ -41,6 +42,16 @@ caddy version   # verify
 # Install PM2
 bun install -g pm2
 pm2 --version   # verify
+
+# Install Ollama (self-hosted LLM — primary inference engine)
+curl -fsSL https://ollama.com/install.sh | sh
+ollama --version   # verify
+
+# Pull Qwen2.5-3B model (~2 GB download, GGUF Q4_K_M)
+ollama pull qwen2.5:3b
+
+# Verify model loads and responds
+ollama run qwen2.5:3b "Reply with one word: ready" --nowordwrap
 ```
 
 ---
@@ -78,8 +89,14 @@ BASE_URL=https://lobre.lat
 PORT=3000
 
 REDIS_URL=redis://localhost:6379
-GROQ_API_KEY=gsk_...            # dari console.groq.com
 QDRANT_URL=http://localhost:6333
+
+# Ollama self-hosted LLM (primary — harus sudah di-pull di Step 1)
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=qwen2.5:3b
+
+# Groq cloud fallback (opsional — dipakai otomatis jika Ollama down)
+GROQ_API_KEY=                   # dari console.groq.com (bisa dikosongkan)
 
 # x402 / CDP (untuk testnet, bisa dikosongkan dulu)
 CDP_API_KEY_ID=
