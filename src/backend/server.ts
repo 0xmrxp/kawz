@@ -45,5 +45,7 @@ const port = parseInt(env.PORT);
 
 console.log(`[lobre] listening on http://localhost:${port} (${env.ENVIRONMENT})`);
 
-// Bun picks up the exported { port, fetch } object and starts the HTTP server.
-export default { port, fetch: app.fetch };
+// Explicit Bun.serve() required when running under PM2 fork mode.
+// The 'export default { port, fetch }' pattern only activates Bun's HTTP server
+// when Bun is the direct entry-point runner — it does not work via PM2.
+Bun.serve({ port, fetch: app.fetch });
