@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "schemes": ["exact"],
+  "networks": ["eip155:8453"],
+  "facilitator": "https://x402.org/facilitator"
+}
