@@ -7,7 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 - CDP Bazaar auto-index pending
-- "Input schema is missing" x15 — `[warning]` tidak blocking; `accepts[].extensions.bazaar` sudah dipasang via 402 interceptor
+
+---
+
+## [0.9.7-dev] — 2026-07-14 · Fix inputSchema format untuk x402scan registration
+
+### Fixed
+- `server.ts` + `middleware/x402.ts` — update `BAZAAR_ACCEPT_SCHEMA(S)` format:
+  **Root cause**: x402scan mencari `accepts[i].extensions.bazaar.info.input.inputSchema` di 402 challenge.
+  Sebelumnya: `info: {}` (kosong) untuk GET endpoints, `info: { input: {...example_only} }` tanpa `inputSchema` untuk POST endpoints.
+  **Fix**: semua 15 entry sekarang punya `info.input = { type, method, body|queryParams, inputSchema: {...} }`.
+  Format baru memenuhi DUALREQUIREMENT:
+    1. `@x402/hono` validation → `{ info: any, schema: any }` (top-level schema tetap ada)
+    2. x402scan lookup → `info.input.inputSchema` (path yang dicari scanner)
+- `middleware/x402.ts` — re-add `extensions: { bazaar: BAZAAR_ACCEPT_SCHEMA[path] }` ke route config
+  (removed di 0.9.5 karena BAZAAR_META format salah; sekarang BAZAAR_ACCEPT_SCHEMA format sudah benar)
+  Ini memasukkan bazaar ke `payment-required` header via `@x402/hono`, bukan hanya response body.
+  Kedua jalur (header + body) sekarang terisi inputSchema yang benar.
 
 ---
 
