@@ -1,0 +1,217 @@
+# Lobre — Agentic Infrastructure Engine
+
+> Pay-per-request utility infrastructure for autonomous AI agents.
+> 15 endpoints across 3 bundles: trading data, code intelligence, NLP research.
+> No sign-up. No API keys. Payment is the credential.
+> Settlement: USDC via x402 (on-chain, Base mainnet) or MPP (Tempo session-based).
+
+## Onboarding
+
+- [Onboard](https://lobre.lat/docs): Set up AgentCash wallet and add Lobre
+- [OpenAPI spec](https://lobre.lat/api/openapi.json): Machine-readable contract with payment info
+- [MCP server](https://lobre.lat/api/mcp): All 15 tools via Streamable HTTP Transport
+
+## Trading Intelligence Endpoints
+
+- [GET vitals](https://lobre.lat/api/v1/trading/engine/vitals): Live BTC/ETH price, 24h change, volume from Binance — $0.002
+- [GET orderbook-depth](https://lobre.lat/api/v1/trading/engine/orderbook-depth): CEX orderbook bids/asks, spread, imbalance (?pair=) — $0.005
+- [GET mev-risk-index](https://lobre.lat/api/v1/trading/engine/mev-risk-index): MEV sandwich attack risk score 0-100 for current Base block — $0.004
+- [GET funding-rates](https://lobre.lat/api/v1/trading/engine/funding-rates): BTC/ETH/SOL perpetual futures funding rates from Binance — $0.002
+- [GET whale-tracker](https://lobre.lat/api/v1/trading/engine/whale-tracker): USDC transfers on Base above $500K via Blockscout — $0.008
+
+## Coding Cache Endpoints
+
+- [POST dependency-tree](https://lobre.lat/api/v1/coding/cache/dependency-tree): Import/export dependency graph from JS/TS source via @babel/parser — $0.003
+- [POST token-compressor](https://lobre.lat/api/v1/coding/cache/token-compressor): Strip comments and whitespace to minimize LLM token usage — $0.002
+- [POST syntax-heartbeat](https://lobre.lat/api/v1/coding/cache/syntax-heartbeat): Validate JS/TS/JSX syntax, return parse errors with position hints — $0.002
+- [POST refactor-suggest](https://lobre.lat/api/v1/coding/cache/refactor-suggest): LLM-powered refactoring suggestions with severity ratings — $0.005
+- [POST security-audit](https://lobre.lat/api/v1/coding/cache/security-audit): Static security audit via LLM — SQL injection, XSS, hardcoded secrets — $0.006
+
+## Research Pruner Endpoints
+
+- [POST heartbeat](https://lobre.lat/api/v1/analysis/memory/heartbeat): Cosine similarity between two texts using BGE-base-en-v1.5 embeddings — $0.003
+- [POST entity-extractor](https://lobre.lat/api/v1/analysis/memory/entity-extractor): Extract named entities (persons, orgs, dates, locations, money) via LLM — $0.006
+- [POST context-ranker](https://lobre.lat/api/v1/analysis/memory/context-ranker): Re-rank text chunks by semantic relevance to a query — $0.005
+- [POST bias-detector](https://lobre.lat/api/v1/analysis/memory/bias-detector): Detect framing bias, sentiment slant, loaded language in text — $0.005
+- [POST fact-linkage](https://lobre.lat/api/v1/analysis/memory/fact-linkage): Verify claims via Google Fact Check API + LLM fallback — $0.012
+
+---
+
+# GET /api/v1/trading/engine/vitals
+URL: https://lobre.lat/api/v1/trading/engine/vitals
+
+Live BTC and ETH market vitals from Binance. Falls back to CoinGecko on upstream failure. Cached 10 seconds.
+
+Price: $0.002 USDC
+Method: GET
+Request: No body required.
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": "binance", "btc": { "price_usd": number, "change_24h_pct": number, "high_24h": number, "low_24h": number, "volume_24h": number }, "eth": { "price_usd": number, "change_24h_pct": number }, "timestamp": number } }
+
+---
+
+# GET /api/v1/trading/engine/orderbook-depth
+URL: https://lobre.lat/api/v1/trading/engine/orderbook-depth
+
+Binance orderbook bids/asks for a trading pair. Returns spread (USD and %), top-10 depth on each side, and book imbalance (-1 to 1). Cached 5 seconds.
+
+Price: $0.005 USDC
+Method: GET
+Request: Optional query parameter ?pair=ETH/USDT (default: BTC/USDT)
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": "binance", "pair": string, "best_bid": number, "best_ask": number, "spread_usd": number, "spread_pct": number, "bid_depth_top10": number, "ask_depth_top10": number, "imbalance": number, "bids": [[price, qty], ...], "asks": [[price, qty], ...], "timestamp": number } }
+
+---
+
+# GET /api/v1/trading/engine/mev-risk-index
+URL: https://lobre.lat/api/v1/trading/engine/mev-risk-index
+
+MEV sandwich attack risk score (0-100) for the current Base mainnet block. Derived from gas price distribution heuristic (high-gas tx ratio) and repeated-sender heuristic. Cached 30 seconds.
+
+Price: $0.004 USDC
+Method: GET
+Request: No body required.
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": "base_rpc", "risk_score": number, "risk_level": "low"|"medium"|"high"|"critical", "block_number": number, "total_txs": number, "high_gas_txs": number, "high_gas_ratio_pct": number, "max_same_sender_txs": number, "timestamp": number } }
+
+---
+
+# GET /api/v1/trading/engine/funding-rates
+URL: https://lobre.lat/api/v1/trading/engine/funding-rates
+
+Perpetual futures funding rates for BTC, ETH, and SOL from Binance Futures. Includes rate as percentage, annualized rate, and next funding timestamp. Cached 15 seconds.
+
+Price: $0.002 USDC
+Method: GET
+Request: No body required.
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": "binance_futures", "rates": [{ "symbol": string, "funding_rate": number, "rate_pct": string, "annualized_pct": number, "next_funding_ms": number, "mark_price": number, "index_price": number }], "btc_annualized_pct": number, "timestamp": number } }
+
+---
+
+# GET /api/v1/trading/engine/whale-tracker
+URL: https://lobre.lat/api/v1/trading/engine/whale-tracker
+
+Recent USDC transfers on Base mainnet above $500,000. Source: Blockscout open-source block explorer (no API key required). Returns up to 25 most recent large transfers. Cached 60 seconds.
+
+Price: $0.008 USDC
+Method: GET
+Request: No body required.
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": "blockscout_base", "large_transfers": [{ "hash": string, "from": string, "to": string, "amount_usdc": number, "block_number": number, "age_seconds": number }], "total_found": number, "threshold_usd": 500000, "timestamp": number } }
+
+---
+
+# POST /api/v1/coding/cache/dependency-tree
+URL: https://lobre.lat/api/v1/coding/cache/dependency-tree
+
+Parse static import and export dependency graph from JavaScript or TypeScript source code using @babel/parser. Supports TypeScript, JSX, and ES modules. Returns list of imported modules, exported modules, and import depth.
+
+Price: $0.003 USDC
+Method: POST
+Request body: { "code": string (required), "filename": string (optional, e.g. "server.ts") }
+Response: { "success": true, "bundle": "coding_cache", "data": { "imports": string[], "exports": string[], "depth": number } }
+
+---
+
+# POST /api/v1/coding/cache/token-compressor
+URL: https://lobre.lat/api/v1/coding/cache/token-compressor
+
+Strip comments (single-line and multi-line) and collapse whitespace from source code to minimize LLM token usage. Returns compressed string with compression ratio.
+
+Price: $0.002 USDC
+Method: POST
+Request body: { "raw_code": string (required) }
+Response: { "success": true, "bundle": "coding_cache", "data": { "compressed": string, "ratio_pct": number, "original_bytes": number, "compressed_bytes": number } }
+
+---
+
+# POST /api/v1/coding/cache/syntax-heartbeat
+URL: https://lobre.lat/api/v1/coding/cache/syntax-heartbeat
+
+Validate JavaScript, TypeScript, or JSX syntax using @babel/parser with errorRecovery. Returns parse errors with position hints and line count.
+
+Price: $0.002 USDC
+Method: POST
+Request body: { "code": string (required) }
+Response: { "success": true, "bundle": "coding_cache", "data": { "valid": boolean, "errors": string[], "warnings": string[], "lines": number } }
+
+---
+
+# POST /api/v1/coding/cache/refactor-suggest
+URL: https://lobre.lat/api/v1/coding/cache/refactor-suggest
+
+LLM-powered code review providing refactoring suggestions with severity ratings and overall quality score. Powered by Ollama (qwen2.5:3b, on-device) with Groq cloud fallback.
+
+Price: $0.005 USDC
+Method: POST
+Request body: { "code": string (required), "language": string (optional, default: "typescript") }
+Response: { "success": true, "bundle": "coding_cache", "data": { "suggestions": [{ "type": string, "line_hint": number|null, "description": string, "severity": "low"|"medium"|"high" }], "overall_quality": "poor"|"fair"|"good"|"excellent", "summary": string } }
+
+---
+
+# POST /api/v1/coding/cache/security-audit
+URL: https://lobre.lat/api/v1/coding/cache/security-audit
+
+LLM-powered static security audit detecting SQL injection, XSS, insecure eval, hardcoded secrets, and other vulnerability patterns. Returns risk score 0-100 and severity-rated findings.
+
+Price: $0.006 USDC
+Method: POST
+Request body: { "code": string (required), "language": string (optional, default: "typescript") }
+Response: { "success": true, "bundle": "coding_cache", "data": { "vulnerabilities": [{ "id": string, "severity": "low"|"medium"|"high"|"critical", "title": string, "description": string, "line_hint": number|null, "recommendation": string }], "risk_score": number, "summary": string } }
+
+---
+
+# POST /api/v1/analysis/memory/heartbeat
+URL: https://lobre.lat/api/v1/analysis/memory/heartbeat
+
+Compute cosine similarity between two texts using BAAI/bge-base-en-v1.5 embeddings (768 dimensions). Runs on-device via @xenova/transformers — no external API call. Includes human-readable interpretation.
+
+Price: $0.003 USDC
+Method: POST
+Request body: { "text_a": string (required), "text_b": string (required) }
+Response: { "success": true, "bundle": "live_vector_pruner", "data": { "similarity": number, "similarity_pct": number, "vector_dims": 768, "interpretation": "distinct"|"related"|"very similar", "timestamp": number } }
+
+---
+
+# POST /api/v1/analysis/memory/entity-extractor
+URL: https://lobre.lat/api/v1/analysis/memory/entity-extractor
+
+Extract named entities from unstructured text via LLM. Entity types: PERSON, ORG, LOC, DATE, MONEY, PRODUCT, OTHER. Each entity includes confidence level.
+
+Price: $0.006 USDC
+Method: POST
+Request body: { "text": string (required, max ~3000 chars) }
+Response: { "success": true, "bundle": "live_vector_pruner", "data": { "entities": [{ "text": string, "type": "PERSON"|"ORG"|"LOC"|"DATE"|"MONEY"|"PRODUCT"|"OTHER", "confidence": "low"|"medium"|"high" }], "entity_count": number } }
+
+---
+
+# POST /api/v1/analysis/memory/context-ranker
+URL: https://lobre.lat/api/v1/analysis/memory/context-ranker
+
+Re-rank a list of text chunks by semantic relevance to a query using BGE-base-en-v1.5 embeddings and cosine similarity. Returns chunks sorted by score descending.
+
+Price: $0.005 USDC
+Method: POST
+Request body: { "query": string (required), "chunks": string[] (required, non-empty array) }
+Response: { "success": true, "bundle": "live_vector_pruner", "data": { "ranked": [{ "index": number, "chunk": string, "score": number }], "query_vector_dims": number, "timestamp": number } }
+
+---
+
+# POST /api/v1/analysis/memory/bias-detector
+URL: https://lobre.lat/api/v1/analysis/memory/bias-detector
+
+Detect framing bias, sentiment slant, and loaded language in text via LLM. Returns bias types detected, specific examples with explanations, and overall bias score 0-100.
+
+Price: $0.005 USDC
+Method: POST
+Request body: { "text": string (required, max ~3000 chars) }
+Response: { "success": true, "bundle": "live_vector_pruner", "data": { "bias_detected": boolean, "bias_types": ("framing"|"sentiment"|"loaded_language"|"omission"|"selection")[], "confidence": "low"|"medium"|"high", "bias_score": number, "examples": [{ "phrase": string, "type": string, "explanation": string }], "summary": string } }
+
+---
+
+# POST /api/v1/analysis/memory/fact-linkage
+URL: https://lobre.lat/api/v1/analysis/memory/fact-linkage
+
+Verify a claim against the Google Fact Check Tools API (ClaimReview global database). Falls back to LLM analysis for claims not yet fact-checked by humans. Most expensive endpoint due to external API + LLM combination.
+
+Price: $0.012 USDC
+Method: POST
+Request body: { "claim": string (required, max ~512 chars), "language": string (optional, default: "en") }
+Response (google_factcheck source): { "success": true, "bundle": "live_vector_pruner", "data": { "source": "google_factcheck", "claims": [{ "claim_text": string, "claimant": string, "reviews": [{ "publisher": string, "url": string, "rating": string }] }], "verified": number, "unverified": number, "timestamp": number } }
+Response (llm source): { "success": true, "bundle": "live_vector_pruner", "data": { "source": "llm", "assessment": "likely_true"|"likely_false"|"misleading"|"unverifiable", "confidence": "low"|"medium"|"high", "reasoning": string, "caveats": string, "timestamp": number } }
