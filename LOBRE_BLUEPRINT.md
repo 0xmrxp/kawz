@@ -1112,9 +1112,15 @@ Payments settle in USDC on Base, Solana, or Tempo.
 - [ ] Setup GitHub Actions SSH deploy (§14.5) — tambah `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` di GitHub Secrets.
 - [ ] Smoke test end-to-end dengan jumlah USDC kecil via `npx agentcash fetch`.
 
-### **Phase 10 — Registrasi & Go-Live**
-- [ ] Daftarkan origin ke x402scan dan mppscan (lihat §15).
-- [ ] Verifikasi listing muncul di CDP Bazaar (dengan fallback manual jika belum, lihat §10).
+### **Phase 10 — Registrasi & Go-Live** *(sebagian selesai)*
+- [x] AgentCash discovery `discover https://lobre.lat` → 15 endpoints ditemukan, protokol `[x402, mpp]`, harga benar
+- [x] `public/favicon.ico` ditambahkan — FAVICON_MISSING warning resolved
+- [x] `infra/Caddyfile` — `/openapi.json` serve langsung via backend (discovery tools tidak follow redirect)
+- [ ] Selesaikan `L3_NOT_FOUND` x15 — 402 body `{}` kosong, payment challenge requirements tidak terisi
+- [ ] Daftarkan origin ke x402scan: `https://www.x402scan.com/resources/register`
+- [ ] Daftarkan origin ke mppscan: `https://www.mppscan.com/register`
+- [ ] Verifikasi listing muncul di CDP Bazaar (Bazaar crawler butuh CDP facilitator aktif + `discoverable: true`)
+- [ ] `npx agentcash add https://lobre.lat` — daftarkan ke Poncho/AgentCash marketplace
 - [ ] Monitoring awal: cek margin riil vs proyeksi harga di §4, sesuaikan bila perlu.
 - [ ] Umumkan Lobre ke komunitas `awesome-x402` / `awesome-mpp`.
 

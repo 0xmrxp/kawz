@@ -6,8 +6,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 ## [Unreleased]
-- Phase 9 remaining: CDP Facilitator production key, GitHub Actions SSH deploy, smoke test
-- Phase 10: Discovery registration (x402scan, mppscan)
+- Phase 9 remaining: isi CDP_API_KEY_ID + CDP_API_KEY_SECRET di .env VPS, GitHub Actions SSH deploy, smoke test USDC
+- Phase 10: registrasi x402scan + mppscan, Poncho marketplace
+- Known issue: 402 response body `{}` kosong — payment challenge requirements tidak terisi (investigasi)
+
+---
+
+## [0.9.2-dev] — 2026-07-14 · CDP Production Auth + Bazaar Discoverable
+
+### Added
+- `@coinbase/x402 ^0.3.0` — handles CDP JWT auth automatically by reading `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` from env
+- `public/favicon.ico` — removes `FAVICON_MISSING` warning from AgentCash discovery
+- `infra/Caddyfile` — added `handle /openapi.json` block (rewrite + reverse_proxy) so discovery tools find spec without redirect
+
+### Changed
+- `middleware/x402.ts` — complete rewrite per official CDP x402 seller docs:
+  - Production: `@coinbase/x402` facilitator via `require("@coinbase/x402").facilitator`
+  - Testnet fallback: `x402.org/facilitator` when `CDP_API_KEY_ID` is empty
+  - Bazaar extensions: `{ bazaar: { discoverable: true, category, tags } }` (official format)
+  - All 15 routes: `description` + `mimeType: "application/json"` added
+  - `BAZAAR_META` map: category + tags per endpoint for Bazaar semantic search
+
+### Discovery Status
+- AgentCash `discover https://lobre.lat` → **15 endpoints found** ✓
+  - Source: `https://lobre.lat/openapi.json`
+  - Protocols: `[x402, mpp]` on all routes
+  - Prices: correct per PRICING config
+- Warnings remaining: `L3_NOT_FOUND` x15 — 402 body `{}` not satisfying AgentCash L3 check
 
 ---
 
