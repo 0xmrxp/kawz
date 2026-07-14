@@ -29,10 +29,28 @@ app.get("/health", (c) =>
   c.json({ status: "ok", version: "1.0.0", env: env.ENVIRONMENT, timestamp: Date.now() })
 );
 
-// AgentCash L3 compatibility: populate 402 body from payment-required header.
-// @x402/hono v2 puts the challenge in the base64 payment-required header; body stays {}.
-// AgentCash discovery check reads the response BODY for spec data → L3_NOT_FOUND.
-// This middleware runs after x402 (via await next()) and fills the body on every 402.
+// Input schemas per route — added to resource.inputSchema in 402 challenge.
+// mppscan requires this field to register endpoints without "Input schema is missing" warning.
+const ROUTE_INPUT_SCHEMAS: Record<string, unknown> = {
+  "/api/v1/trading/engine/vitals":              { type: "object", properties: {} },
+  "/api/v1/trading/engine/orderbook-depth":     { type: "object", properties: { pair: { type: "string", description: "Trading pair (default: BTC/USDT)", example: "ETH/USDT" } } },
+  "/api/v1/trading/engine/mev-risk-index":      { type: "object", properties: {} },
+  "/api/v1/trading/engine/funding-rates":       { type: "object", properties: {} },
+  "/api/v1/trading/engine/whale-tracker":       { type: "object", properties: {} },
+  "/api/v1/coding/cache/dependency-tree":       { type: "object", required: ["code"], properties: { code: { type: "string" }, filename: { type: "string" } } },
+  "/api/v1/coding/cache/token-compressor":      { type: "object", required: ["raw_code"], properties: { raw_code: { type: "string" } } },
+  "/api/v1/coding/cache/syntax-heartbeat":      { type: "object", required: ["code"], properties: { code: { type: "string" } } },
+  "/api/v1/coding/cache/refactor-suggest":      { type: "object", required: ["code"], properties: { code: { type: "string" }, language: { type: "string", default: "typescript" } } },
+  "/api/v1/coding/cache/security-audit":        { type: "object", required: ["code"], properties: { code: { type: "string" }, language: { type: "string", default: "typescript" } } },
+  "/api/v1/analysis/memory/heartbeat":          { type: "object", required: ["text_a", "text_b"], properties: { text_a: { type: "string" }, text_b: { type: "string" } } },
+  "/api/v1/analysis/memory/entity-extractor":   { type: "object", required: ["text"], properties: { text: { type: "string" } } },
+  "/api/v1/analysis/memory/context-ranker":     { type: "object", required: ["query", "chunks"], properties: { query: { type: "string" }, chunks: { type: "array", items: { type: "string" } } } },
+  "/api/v1/analysis/memory/bias-detector":      { type: "object", required: ["text"], properties: { text: { type: "string" } } },
+  "/api/v1/analysis/memory/fact-linkage":       { type: "object", required: ["claim"], properties: { claim: { type: "string" }, language: { type: "string", default: "en" } } },
+};
+
+// Populate 402 response body + inject resource.inputSchema for mppscan compatibility.
+// @x402/hono v2 puts the challenge in payment-required header; body stays {}.
 app.use("/v1/*", async (c, next) => {
   await next();
   if (c.res.status === 402) {
@@ -40,6 +58,10 @@ app.use("/v1/*", async (c, next) => {
     if (challenged) {
       try {
         const decoded = JSON.parse(atob(challenged));
+        const inputSchema = ROUTE_INPUT_SCHEMAS[c.req.path];
+        if (inputSchema && decoded.resource) {
+          decoded.resource.inputSchema = inputSchema;
+        }
         const headers = new Headers(c.res.headers);
         headers.set("content-type", "application/json");
         c.res = new Response(JSON.stringify(decoded), { status: 402, headers });
