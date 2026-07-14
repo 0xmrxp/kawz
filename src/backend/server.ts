@@ -82,16 +82,19 @@ app.use("/v1/*", async (c, next) => {
     if (challenged) {
       try {
         const decoded = JSON.parse(atob(challenged));
-        const path = c.req.path;
+        // c.req.path is basePath-relative (/v1/...) in Hono; maps use /api/v1/... keys
+        const rawPath = c.req.path;
+        const lookupPath = rawPath.startsWith("/v1/") ? `/api${rawPath}` : rawPath;
 
-        // resource.inputSchema
-        const inputSchema = ROUTE_INPUT_SCHEMAS[path];
-        if (inputSchema && decoded.resource) {
+        // resource.inputSchema — create resource if @x402/hono v2 omits it
+        const inputSchema = ROUTE_INPUT_SCHEMAS[lookupPath];
+        if (inputSchema) {
+          if (!decoded.resource) decoded.resource = {};
           decoded.resource.inputSchema = inputSchema;
         }
 
         // accepts[i].extensions.bazaar — x402scan/mppscan DISCOVERY.md spec
-        const bazaarAcceptSchema = BAZAAR_ACCEPT_SCHEMAS[path];
+        const bazaarAcceptSchema = BAZAAR_ACCEPT_SCHEMAS[lookupPath];
         if (bazaarAcceptSchema && Array.isArray(decoded.accepts)) {
           decoded.accepts = decoded.accepts.map((accept: unknown) => ({
             ...(accept as Record<string, unknown>),
