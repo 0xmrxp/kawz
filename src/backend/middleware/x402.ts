@@ -10,7 +10,8 @@
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
-import { createAuthHeader, createCorrelationHeader } from "@coinbase/x402";
+import { createCorrelationHeader } from "@coinbase/x402";
+import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "../types";
 import { ROUTE_PRICE_MAP } from "../config/pricing";
@@ -19,20 +20,28 @@ const CDP_HOST = "api.cdp.coinbase.com";
 const CDP_PATH = "/platform/v2/x402";
 const CDP_URL  = `https://${CDP_HOST}${CDP_PATH}`;
 
-// @coinbase/x402 v0.3.0 bug: createCdpAuthHeaders() returns only {verify, settle}.
-// HTTPFacilitatorClient.getSupported() calls createAuthHeaders("supported") and gets
-// {} back (undefined key), so the Authorization header is missing → CDP 401.
-// This function generates the JWT for all three operations explicitly.
+// Two bugs in @coinbase/x402 v0.3.0:
+// 1. createCdpAuthHeaders() missing "supported" key → getSupported() sends no auth → 401.
+// 2. createAuthHeader() hardcodes requestMethod:"POST" — but getSupported() is a GET
+//    request, so the JWT uris claim ("POST .../supported") doesn't match the actual HTTP
+//    method → CDP rejects it → 401 even when the key is present.
+// Fix: use generateJwt directly with the correct method per operation.
 function buildCdpAuthHeaders(apiKeyId: string, apiKeySecret: string) {
   return async () => {
-    const make = async (op: string) => ({
-      Authorization: await createAuthHeader(apiKeyId, apiKeySecret, CDP_HOST, `${CDP_PATH}/${op}`),
+    const make = async (method: string, op: string) => ({
+      Authorization: `Bearer ${await generateJwt({
+        apiKeyId,
+        apiKeySecret,
+        requestMethod: method,
+        requestHost:   CDP_HOST,
+        requestPath:   `${CDP_PATH}/${op}`,
+      })}`,
       "Correlation-Context": createCorrelationHeader(),
     });
     return {
-      verify:    await make("verify"),
-      settle:    await make("settle"),
-      supported: await make("supported"),
+      verify:    await make("POST", "verify"),
+      settle:    await make("POST", "settle"),
+      supported: await make("GET",  "supported"),  // GET — must match getSupported()'s fetch method
     };
   };
 }
