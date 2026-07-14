@@ -112,7 +112,13 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
   const facilitatorUrl = isProd ? PROD_FACILITATOR : TESTNET_FACILITATOR;
   const network        = isProd ? MAINNET_NETWORK  : TESTNET_NETWORK;
 
-  const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
+  const facilitatorClient = new HTTPFacilitatorClient({
+    url: facilitatorUrl,
+    ...(isProd && {
+      apiKeyId:     env.CDP_API_KEY_ID,
+      apiKeySecret: env.CDP_API_KEY_SECRET,
+    }),
+  });
 
   // Register ExactEvmScheme for the target network.
   // Bazaar discovery metadata is declared per-route via extensions field below.
