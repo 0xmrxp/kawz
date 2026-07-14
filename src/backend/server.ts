@@ -29,6 +29,25 @@ app.get("/health", (c) =>
   c.json({ status: "ok", version: "1.0.0", env: env.ENVIRONMENT, timestamp: Date.now() })
 );
 
+// AgentCash L3 compatibility: populate 402 body from payment-required header.
+// @x402/hono v2 puts the challenge in the base64 payment-required header; body stays {}.
+// AgentCash discovery check reads the response BODY for spec data → L3_NOT_FOUND.
+// This middleware runs after x402 (via await next()) and fills the body on every 402.
+app.use("/v1/*", async (c, next) => {
+  await next();
+  if (c.res.status === 402) {
+    const challenged = c.res.headers.get("payment-required");
+    if (challenged) {
+      try {
+        const decoded = JSON.parse(atob(challenged));
+        const headers = new Headers(c.res.headers);
+        headers.set("content-type", "application/json");
+        c.res = new Response(JSON.stringify(decoded), { status: 402, headers });
+      } catch { /* leave {} body if decode fails */ }
+    }
+  }
+});
+
 // Payment middleware — applied to all /v1/* routes
 // Dev mode: pass-through unless FORCE_PAYMENT=true. Production: real x402 + MPP.
 app.use("/v1/*", createX402Middleware(env));
