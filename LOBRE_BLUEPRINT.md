@@ -1108,7 +1108,7 @@ Payments settle in USDC on Base, Solana, or Tempo.
 - [x] Ollama `qwen2.5:3b` installed + ready
 - [x] `EVM_PAYEE_ADDRESS` diisi dengan wallet production
 - [x] `MPP_SECRET_KEY` di-generate dan diisi
-- [ ] Ganti facilitator x402 dari `x402.org` ke CDP Facilitator produksi — isi `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` di `.env`, lalu `pm2 reload lobre --update-env`.
+- [ ] **CDP Facilitator auth** — `HTTPFacilitatorClient` membutuhkan Ed25519 JWT yang di-generate oleh CDP SDK khusus, bukan API key biasa. Status: dalam investigasi. Join `discord.gg/cdp` atau lihat `github.com/x402-foundation/x402` untuk konfirmasi auth format. Sementara ini server memakai testnet facilitator `x402.org`. **Update `.env`**: kosongkan `CDP_API_KEY_ID` agar otomatis fallback ke testnet sampai CDP auth terselesaikan.
 - [ ] Setup GitHub Actions SSH deploy (§14.5) — tambah `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` di GitHub Secrets.
 - [ ] Smoke test end-to-end dengan jumlah USDC kecil via `npx agentcash fetch`.
 

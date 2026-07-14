@@ -11,6 +11,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.9.1-dev] — 2026-07-14 · Bazaar Discovery + CDP Auth Investigation
+
+### Added
+- `@x402/extensions ^2.18.0` to package.json
+- `middleware/x402.ts`: per-route Bazaar discovery via `declareDiscoveryExtension()` — all 15 endpoints have input/output schemas and examples for CDP Bazaar catalog
+- `ROUTE_DESCRIPTIONS` map: human-readable descriptions per endpoint in 402 response
+
+### Fixed
+- `middleware/x402.ts`: pass `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` to `HTTPFacilitatorClient` (was missing — caused 401 from CDP)
+- `middleware/x402.ts`: remove `bazaarResourceServerExtension` from `.register()` call (wrong API — `.register()` only accepts `(network, scheme)`)
+
+### Known Issue
+- CDP facilitator (`api.cdp.coinbase.com/platform/v2/x402`) returns 401 with current API key — CDP auth uses Ed25519 JWT format, not simple key header. Server falls back to testnet facilitator (`x402.org`) when `CDP_API_KEY_ID` is empty. Under investigation at `discord.gg/cdp`.
+
+---
+
 ## [0.9.0-dev] — 2026-07-14 · VPS Deployment + Bug Fixes
 
 ### Deployed
