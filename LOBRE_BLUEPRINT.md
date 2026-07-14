@@ -1100,11 +1100,17 @@ Payments settle in USDC on Base, Solana, or Tempo.
 - [ ] `bun run build` di folder frontend, output static ke `dist/` — Caddy serve langsung dari `dist/`.
 - [ ] Update `infra/Caddyfile` untuk serve static Astro di root dan proxy `/api/*` ke Bun backend.
 
-### **Phase 9 — Go Production**
-- [ ] Ganti facilitator x402 dari `x402.org` ke CDP Facilitator produksi di `middleware/x402.ts`.
-- [ ] Update `.env` di VPS dengan semua production credentials (CDP key, real EVM payee address).
-- [ ] Setup GitHub Actions SSH deploy (§14.5) — push ke `main` otomatis reload PM2 di VPS.
-- [ ] Smoke test end-to-end dengan jumlah USDC kecil.
+### **Phase 9 — Go Production** *(sebagian selesai)*
+- [x] Deploy server ke VPS Linux (Ubuntu 22.04, DigitalOcean) — live di `https://lobre.lat`
+- [x] Caddy auto-HTTPS (Let's Encrypt) aktif
+- [x] PM2 fork mode + `Bun.serve()` — server stable
+- [x] Docker Redis + Qdrant running
+- [x] Ollama `qwen2.5:3b` installed + ready
+- [x] `EVM_PAYEE_ADDRESS` diisi dengan wallet production
+- [x] `MPP_SECRET_KEY` di-generate dan diisi
+- [ ] Ganti facilitator x402 dari `x402.org` ke CDP Facilitator produksi — isi `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` di `.env`, lalu `pm2 reload lobre --update-env`.
+- [ ] Setup GitHub Actions SSH deploy (§14.5) — tambah `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` di GitHub Secrets.
+- [ ] Smoke test end-to-end dengan jumlah USDC kecil via `npx agentcash fetch`.
 
 ### **Phase 10 — Registrasi & Go-Live**
 - [ ] Daftarkan origin ke x402scan dan mppscan (lihat §15).

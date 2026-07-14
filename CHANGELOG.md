@@ -6,8 +6,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 ## [Unreleased]
-- Phase 9: Production migration (CDP Facilitator, real EVM wallet)
+- Phase 9 remaining: CDP Facilitator production key, GitHub Actions SSH deploy, smoke test
 - Phase 10: Discovery registration (x402scan, mppscan)
+
+---
+
+## [0.9.0-dev] — 2026-07-14 · VPS Deployment + Bug Fixes
+
+### Deployed
+- Lobre live at `https://lobre.lat` — Ubuntu 22.04 VPS, DigitalOcean
+- Caddy auto-HTTPS (Let's Encrypt), PM2 fork mode, Docker Redis + Qdrant, Ollama qwen2.5:3b
+
+### Fixed
+- `src/backend/middleware/x402.ts` — rewrote using correct `@x402/hono` v2 API:
+  `paymentMiddleware(routes, x402ResourceServer)` + `ExactEvmScheme` from `@x402/evm/exact/server`
+  (fixes: `No scheme implementation registered for exact on eip155:84532`)
+- `infra/ecosystem.config.cjs` — added `exec_mode: 'fork'`
+  (fixes: PM2 cluster mode incompatible with Bun, process online but port never binds)
+- `src/backend/server.ts` — replaced `export default { port, fetch }` with `Bun.serve()`
+  (fixes: Bun HTTP server not activating under PM2 fork)
+- `src/backend/types.ts` — removed `GROQ_API_KEY` from production required list
+  (Groq is now optional fallback — was crashing server on startup with empty key)
+
+### Added
+- `@x402/evm@2.18.0` to `package.json` (required for `ExactEvmScheme`)
 
 ---
 
