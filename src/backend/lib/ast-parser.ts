@@ -1,6 +1,8 @@
 // AST parser helpers for Bundle 2 (Coding Cache).
-// Phase 4 will implement full dependency-tree and syntax analysis.
-// Using @babel/parser for JS/TS and es-module-lexer for import scanning.
+// Uses @babel/parser for JS/TS/JSX parsing — pure JS, no native deps.
+
+import { parse } from "@babel/parser";
+import type { File } from "@babel/types";
 
 export interface DependencyTree {
   imports: string[];
@@ -15,20 +17,54 @@ export interface SyntaxReport {
   lines: number;
 }
 
-// Phase 4 implementation: parse code and extract import graph.
-export async function buildDependencyTree(_code: string, _filename = "input.ts"): Promise<DependencyTree> {
-  // TODO Phase 4: use @babel/parser + walk AST
-  return { imports: [], exports: [], depth: 0 };
+// Extract all static import/export sources from source code.
+export async function buildDependencyTree(code: string, _filename = "input.ts"): Promise<DependencyTree> {
+  let ast: File;
+  try {
+    ast = parse(code, {
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
+      errorRecovery: true,
+    });
+  } catch {
+    return { imports: [], exports: [], depth: 0 };
+  }
+
+  const imports: string[] = [];
+  const exports: string[] = [];
+
+  for (const node of ast.program.body) {
+    if (node.type === "ImportDeclaration") {
+      imports.push(node.source.value);
+    } else if (
+      node.type === "ExportNamedDeclaration" && node.source
+    ) {
+      exports.push(node.source.value);
+    } else if (node.type === "ExportAllDeclaration") {
+      exports.push(node.source.value);
+    }
+  }
+
+  return { imports, exports, depth: imports.length };
 }
 
-// Phase 4 implementation: syntax validation via @babel/parser.
-export async function checkSyntax(_code: string): Promise<SyntaxReport> {
-  // TODO Phase 4: parse and collect parse errors
-  return { valid: true, errors: [], warnings: [], lines: 0 };
+// Validate syntax via @babel/parser, collecting parse errors.
+export async function checkSyntax(code: string): Promise<SyntaxReport> {
+  const lines = code.split("\n").length;
+  try {
+    const ast = parse(code, {
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
+      errorRecovery: true,
+    });
+    const errors = (ast.errors ?? []).map((e) => `${e.reasonCode} (pos ${e.pos})`);
+    return { valid: errors.length === 0, errors, warnings: [], lines };
+  } catch (err) {
+    return { valid: false, errors: [String(err)], warnings: [], lines };
+  }
 }
 
-// Token compression: remove whitespace, comments, shorten identifiers heuristically.
-// Pure string processing — no AST needed, safe for Phase 1.
+// Strip comments and collapse whitespace — pure string ops, no AST needed.
 export function compressTokens(code: string): { compressed: string; ratio: number } {
   const original = code.length;
   const compressed = code

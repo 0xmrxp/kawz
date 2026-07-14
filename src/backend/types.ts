@@ -15,6 +15,8 @@ export interface Env {
   // On-chain data sources (optional — sensible public defaults provided)
   BLOCKSCOUT_BASE_URL: string;
   BASE_RPC_URL: string;
+  // Google Fact Check Tools API key (free, optional — fallback to Groq if empty)
+  GOOGLE_FACTCHECK_API_KEY: string;
 }
 
 // Hono Variables type — injected via app.use("*") in server.ts
@@ -50,5 +52,6 @@ export function loadEnv(): Env {
     MPP_TEMPO_USDC_ADDRESS: process.env.MPP_TEMPO_USDC_ADDRESS ?? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     BLOCKSCOUT_BASE_URL: process.env.BLOCKSCOUT_BASE_URL ?? "https://base.blockscout.com",
     BASE_RPC_URL: process.env.BASE_RPC_URL ?? "https://mainnet.base.org",
+    GOOGLE_FACTCHECK_API_KEY: process.env.GOOGLE_FACTCHECK_API_KEY ?? "",
   };
 }
