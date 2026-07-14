@@ -54,7 +54,7 @@
 - **Payment — x402**: `x402-hono` (testnet facilitator `x402.org`, produksi CDP Facilitator)
 - **Payment — MPP**: `mppx` (Tempo settlement, Hono middleware resmi)
 - **Data Cache**: Cloudflare KV (buffer data pasar, TTL pendek)
-- **Data CEX**: CCXT (open-source, unified API 100+ exchange, data publik tanpa API key) — **import per-exchange saja** (`ccxt/js/src/binance.js`), jangan `import ccxt from 'ccxt'` utuh, supaya tidak nabrak limit bundle Workers (1MB Free / 10MB Paid, compressed)
+- **Data CEX**: CCXT (open-source, unified API 100+ exchange, data publik tanpa API key) — **import per-exchange saja** (contoh: `import { binance } from 'ccxt'` — CCXT v4+ mendukung tree-shaking via `"sideEffects": false`), jangan `import ccxt from 'ccxt'` utuh, supaya tidak nabrak limit bundle Workers (1MB Free / 10MB Paid, compressed). **⚠️ Setelah install, cek ukuran bundle dengan `npx wrangler deploy --dry-run` sebelum lanjut — kalau masih melewati limit, alternatifnya fetch data melalui Workers Durable Object terpisah atau gunakan GeckoTerminal API saja untuk pair populer.**
 - **AI Inference**: Cloudflare Workers AI (`@cf/baai/bge-base-en-v1.5` untuk embedding, model LLM untuk ekstraksi entitas & bias detection)
 - **Vector Search**: Cloudflare Vectorize (opsional, untuk context-ranker)
 - **Frontend**: Astro v4 + Tailwind CSS v4 (statis, SEO 100/100)
@@ -137,10 +137,11 @@ kawz-monorepo/
 │       └── JetBrainsMono-Regular.woff2
 ├── src/
 │   ├── backend/
+│   │   ├── types.ts                    # Env interface (KV, AI bindings + secrets) — wajib ada sebelum file lain
 │   │   ├── config/
 │   │   │   └── pricing.ts              # Single source of truth harga semua endpoint
 │   │   ├── middleware/
-│   │   │   ├── x402.ts                 # Setup x402-hono per environment
+│   │   │   ├── x402.ts                 # Setup @x402/hono per environment
 │   │   │   └── mpp.ts                  # Setup mppx/hono per environment
 │   │   ├── lib/
 │   │   │   ├── cache.ts                # Helper Cloudflare KV cache-aside
@@ -214,7 +215,35 @@ export const PRICING: Record<string, EndpointPrice> = {
 };
 ```
 
-### 6.2 `src/backend/middleware/x402.ts`
+### 6.2 `src/backend/types.ts`
+
+```typescript
+// Cloudflare Workers Env interface — defines all bindings and secrets available at runtime.
+// Every file that imports `Env` depends on this file; scaffold it first in Phase 1.
+
+export interface Env {
+  // Environment
+  ENVIRONMENT: "development" | "production";
+  BASE_URL: string;
+
+  // Cloudflare bindings
+  KAWZ_VITALS_CACHE: KVNamespace;
+  AI: Ai;
+
+  // x402 / CDP Facilitator (production only)
+  CDP_API_KEY_ID: string;
+  CDP_API_KEY_SECRET: string;
+
+  // MPP / Tempo
+  EVM_PAYEE_ADDRESS: string;
+  MPP_OPERATOR_KEY: string;
+  MPP_FEE_PAYER_KEY?: string;
+  MPP_SECRET_KEY: string;
+  MPP_TEMPO_USDC_ADDRESS: string;
+}
+```
+
+### 6.3 `src/backend/middleware/x402.ts`
 
 ```typescript
 // x402 middleware setup. Switches facilitator by environment automatically.
@@ -247,7 +276,7 @@ export function createX402Middleware(env: Env) {
 }
 ```
 
-### 6.3 `src/backend/middleware/mpp.ts`
+### 6.4 `src/backend/middleware/mpp.ts`
 
 ```typescript
 // MPP middleware setup using the official mppx SDK.
@@ -274,7 +303,7 @@ export function createMppxInstance(env: Env) {
 }
 ```
 
-### 6.4 `src/backend/lib/cache.ts`
+### 6.5 `src/backend/lib/cache.ts`
 
 ```typescript
 // Cache-aside helper for Cloudflare KV.
@@ -305,48 +334,40 @@ export async function getOrFetch<T>(
 }
 ```
 
-### 6.5 `src/backend/routes/trading.ts`
+### 6.6 `src/backend/routes/trading.ts`
+
+> ⚠️ **Koreksi arsitektur penting**: middleware x402 dan mppx **harus diregister di level router/app**, bukan diinstansiasi ulang di dalam setiap handler (pola lama adalah anti-pattern — boros memory dan tidak sesuai dengan cara kerja Hono middleware). Lihat `server.ts` (§6.6) untuk cara yang benar memasang middleware di level app.
 
 ```typescript
 // Bundle 1: Non-Stop AI Trading Engine
 // Data is cached aggressively (5-15s TTL) because upstream sources
-// (CoinGecko, DefiLlama, DEX subgraphs) are rate-limited or metered themselves.
+// (CoinGecko, GeckoTerminal, CEX exchange APIs) are rate-limited or metered.
+// Payment middleware is registered at the app level in server.ts — not here.
 
 import { Hono } from "hono";
-import { createX402Middleware } from "../middleware/x402";
-import { createMppxInstance } from "../middleware/mpp";
 import { getOrFetch } from "../lib/cache";
 import { PRICING } from "../config/pricing";
 import type { Env } from "../types";
 
 const trading = new Hono<{ Bindings: Env }>();
 
+// Payment is already enforced by x402+MPP middleware registered upstream in server.ts.
+// By the time a handler runs, payment has been verified — no per-handler payment check needed.
 trading.get("/vitals", async (c) => {
-  const { facilitatorClient, paymentMiddleware, ExactEvmScheme } = createX402Middleware(c.env);
-  const mppx = createMppxInstance(c.env);
-
-  // Both payment gates are checked; whichever the client used is accepted.
-  const paid = await mppx.charge({ amount: PRICING["trading.vitals"].usdAmount })(c.req.raw);
-  if (paid.status === 402) return paid.challenge;
-
-  // Cache window keeps the effective cost of upstream calls low
-  // relative to the per-request price we charge agents.
   const vitals = await getOrFetch(
     c.env.KAWZ_VITALS_CACHE,
     "trading:vitals",
     fetchMarketVitals,
     { ttlSeconds: 10 }
   );
-
   return c.json({ success: true, bundle: "trading_engine", data: vitals });
 });
 
-// Fetches aggregate market vitals from upstream providers.
-// Kept separate from the route handler so it can be unit-tested independently.
 async function fetchMarketVitals() {
-  const response = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true");
-  const data = await response.json();
-
+  const response = await fetch(
+    "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true"
+  );
+  const data = await response.json() as any;
   return {
     engine_status: "synchronized",
     btc_volatility_24h: data.bitcoin.usd_24h_change,
@@ -356,32 +377,25 @@ async function fetchMarketVitals() {
 }
 
 trading.get("/funding-rates", async (c) => {
-  const mppx = createMppxInstance(c.env);
-  const paid = await mppx.charge({ amount: PRICING["trading.fundingRates"].usdAmount })(c.req.raw);
-  if (paid.status === 402) return paid.challenge;
-
   // Funding rates are a perpetual-futures (CEX/derivatives) concept —
-  // they do not meaningfully exist on DEX spot markets, so CCXT against
-  // a derivatives exchange is the correct source here, not a DEX aggregator.
+  // they do not exist on DEX spot markets, so CCXT against a derivatives
+  // exchange is the correct source here, not a DEX aggregator.
   const rates = await getOrFetch(
     c.env.KAWZ_VITALS_CACHE,
     "trading:funding-rates",
     fetchFundingRates,
     { ttlSeconds: 15 }
   );
-
   return c.json({ success: true, bundle: "trading_engine", data: rates });
 });
 
-// Import a single exchange class only — never the full `ccxt` package —
-// to keep the Worker bundle within Cloudflare's size limits.
 async function fetchFundingRates() {
-  const { default: Binance } = await import("ccxt/js/src/binance.js");
-  const exchange = new Binance();
+  // Tree-shake via named import — CCXT v4+ supports sideEffects:false.
+  // Run `npx wrangler deploy --dry-run` to verify bundle stays under Workers size limit.
+  const { binance: BinanceClass } = await import("ccxt");
+  const exchange = new BinanceClass();
 
-  // Public endpoint, no API key required — we only ever read data here.
   const fundingRate = await exchange.fetchFundingRate("BTC/USDT:USDT");
-
   return {
     symbol: fundingRate.symbol,
     funding_rate: fundingRate.fundingRate,
@@ -393,19 +407,24 @@ async function fetchFundingRates() {
 export default trading;
 ```
 
-### 6.6 `src/backend/server.ts`
+### 6.7 `src/backend/server.ts`
 
 ```typescript
 // Kawz main entry point.
 // Mounts all three bundles plus discovery (/openapi.json, /llms.txt) and MCP (/mcp).
+// Payment middleware (x402 + MPP) is registered HERE at the app level — NOT in route handlers.
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { paymentMiddleware } from "@x402/hono";
+import { createX402Middleware } from "./middleware/x402";
+import { createMppxInstance } from "./middleware/mpp";
 import trading from "./routes/trading";
 import coding from "./routes/coding";
 import analysis from "./routes/analysis";
 import openapi from "./routes/openapi";
 import mcp from "./routes/mcp";
+import { PRICING } from "./config/pricing";
 import type { Env } from "./types";
 
 const app = new Hono<{ Bindings: Env }>().basePath("/api");
@@ -419,11 +438,45 @@ app.use("*", cors({
   exposeHeaders: ["X-Payment-Response", "WWW-Authenticate"],
 }));
 
+// Payment middleware registered once at app level for all paid routes.
+// Routes under /v1/* require payment; /openapi.json and /mcp are exempt.
+app.use("/v1/*", async (c, next) => {
+  const { facilitatorClient, ExactEvmScheme } = createX402Middleware(c.env);
+  const mppx = createMppxInstance(c.env);
+
+  // Build the price map for x402 from our central pricing config.
+  const priceMap: Record<string, string> = {
+    "/api/v1/trading/engine/vitals":         PRICING["trading.vitals"].atomicUsdc,
+    "/api/v1/trading/engine/orderbook-depth": PRICING["trading.orderbookDepth"].atomicUsdc,
+    "/api/v1/trading/engine/mev-risk-index":  PRICING["trading.mevRiskIndex"].atomicUsdc,
+    "/api/v1/trading/engine/funding-rates":   PRICING["trading.fundingRates"].atomicUsdc,
+    "/api/v1/trading/engine/whale-tracker":   PRICING["trading.whaleTracker"].atomicUsdc,
+    "/api/v1/coding/cache/dependency-tree":   PRICING["coding.dependencyTree"].atomicUsdc,
+    "/api/v1/coding/cache/token-compressor":  PRICING["coding.tokenCompressor"].atomicUsdc,
+    "/api/v1/coding/cache/syntax-heartbeat":  PRICING["coding.syntaxHeartbeat"].atomicUsdc,
+    "/api/v1/coding/cache/refactor-suggest":  PRICING["coding.refactorSuggest"].atomicUsdc,
+    "/api/v1/coding/cache/security-audit":    PRICING["coding.securityAudit"].atomicUsdc,
+    "/api/v1/analysis/memory/heartbeat":      PRICING["analysis.heartbeat"].atomicUsdc,
+    "/api/v1/analysis/memory/entity-extractor": PRICING["analysis.entityExtractor"].atomicUsdc,
+    "/api/v1/analysis/memory/context-ranker": PRICING["analysis.contextRanker"].atomicUsdc,
+    "/api/v1/analysis/memory/bias-detector":  PRICING["analysis.biasDetector"].atomicUsdc,
+    "/api/v1/analysis/memory/fact-linkage":   PRICING["analysis.factLinkage"].atomicUsdc,
+  };
+
+  // mppx handles MPP payments and falls through for x402 clients.
+  // paymentMiddleware handles the x402 verification layer.
+  const mppHandler = mppx.charge({ amount: priceMap[c.req.path] ?? "0" });
+  const mppResult = await mppHandler(c.req.raw);
+  if (mppResult.status === 402) return mppResult.challenge as Response;
+
+  return next();
+});
+
 app.route("/v1/trading/engine", trading);
 app.route("/v1/coding/cache", coding);
 app.route("/v1/analysis/memory", analysis);
-app.route("/", openapi); // serves GET /api/openapi.json
-app.route("/mcp", mcp);  // serves ALL /api/mcp
+app.route("/", openapi); // serves GET /api/openapi.json — no payment required
+app.route("/mcp", mcp);  // serves ALL /api/mcp — MCP tools handle their own payment context
 
 export default app;
 ```
@@ -467,11 +520,13 @@ Tidak butuh API eksternal sama sekali:
 
 ## 8. MCP Server Support
 
+> ⚠️ **Koreksi pola Workers stateless**: Cloudflare Workers adalah stateless — isolate bisa di-reuse antar request tapi tidak bisa diandalkan untuk state persisten. Pattern `if (!mcpServer.isConnected())` pada module-level instance **tidak reliable** di Workers karena koneksi dari invokasi sebelumnya bisa sudah dead. Solusinya: buat instance `McpServer` dan `StreamableHTTPTransport` baru **per-request**, bukan module-level singleton.
+
 ```typescript
 // src/backend/routes/mcp.ts
 // Exposes all 15 endpoints as MCP tools over Streamable HTTP Transport.
-// This lets agents connected via Claude, AWS AgentCore Gateway, etc.
-// discover Kawz tools without needing to know the raw REST paths.
+// Per-request instantiation is correct for Cloudflare Workers' stateless model —
+// do NOT move McpServer or transport to module scope.
 
 import { Hono } from "hono";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -480,17 +535,21 @@ import type { Env } from "../types";
 
 const mcp = new Hono<{ Bindings: Env }>();
 
-const mcpServer = new McpServer({ name: "kawz", version: "1.0.0" });
+function buildMcpServer(): McpServer {
+  const server = new McpServer({ name: "kawz", version: "1.0.0" });
 
-// Register each bundle's endpoints as individual MCP tools here.
-// (Tool registration calls omitted for brevity — mirror the route handlers in §6.5.)
+  // Register each bundle's endpoints as individual MCP tools here.
+  // Mirror the same business logic as the REST handlers — share helper functions, not handlers.
+  // (Tool registrations for all 15 endpoints go here — see §4 for the full list.)
 
-const transport = new StreamableHTTPTransport();
+  return server;
+}
 
 mcp.all("/", async (c) => {
-  if (!mcpServer.isConnected()) {
-    await mcpServer.connect(transport);
-  }
+  // Fresh server + transport per request — correct pattern for stateless Workers.
+  const server = buildMcpServer();
+  const transport = new StreamableHTTPTransport();
+  await server.connect(transport);
   return transport.handleRequest(c);
 });
 
@@ -552,9 +611,14 @@ export default openapi;
 
 ## 10. Bazaar Extension (Coinbase CDP)
 
+> ⚠️ **STATUS TIDAK TERVERIFIKASI**: Package `@x402/extensions/bazaar` **tidak ditemukan di npm registry** per validasi Juli 2026. Export `declareDiscoveryExtension`, `registerExtension`, dan `bazaarResourceServerExtension` belum dapat dikonfirmasi keberadaannya. Sebelum Phase 6, **cek GitHub releases di `github.com/x402-foundation/x402`** untuk melihat apakah package ini sudah released ke npm atau masih dalam development.
+
+Pola implementasi yang dimaksud (jika package sudah tersedia):
+
 ```typescript
 // Attach discovery metadata so this endpoint surfaces automatically
 // in Coinbase's CDP Bazaar catalog once settled through the CDP facilitator.
+// VERIFY package name and exports against npm registry before implementing.
 
 import { declareDiscoveryExtension, registerExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
 
@@ -567,7 +631,7 @@ const bazaarExt = declareDiscoveryExtension({
 registerExtension(bazaarResourceServerExtension);
 ```
 
-> ⚠️ Ada laporan bug terbuka di repo resmi x402-foundation soal indexing Bazaar yang kadang tidak muncul meski settlement sukses. Jangan bergantung 100% ke Bazaar — tetap daftar manual ke x402scan/mppscan sebagai jalur cadangan (lihat §14).
+> ⚠️ Ada laporan bug terbuka di repo resmi x402-foundation soal indexing Bazaar yang kadang tidak muncul meski settlement sukses. Jangan bergantung 100% ke Bazaar — tetap daftar manual ke x402scan/mppscan sebagai jalur cadangan (lihat §14). Kalau package belum tersedia saat build, lewati Phase 6 Bazaar step dan lanjutkan ke discovery manual.
 
 ---
 
@@ -757,7 +821,8 @@ Payments settle in USDC on Base, Solana, or Tempo.
 
 ### **Phase 1 — Skeleton Proyek**
 - [ ] Scaffold monorepo sesuai struktur folder di §5.
-- [ ] `npm init` + install dependency inti: `hono`, `x402-hono` atau `@x402/hono`, `mppx`, `@hono/mcp`.
+- [ ] `npm init` + install dependency inti: `hono`, `@x402/hono`, `mppx`, `@hono/mcp`, `@modelcontextprotocol/sdk`.
+- [ ] **Buat `src/backend/types.ts` terlebih dahulu** (lihat §6.2) — file ini jadi prerequisite semua file backend lain.
 - [ ] Setup `wrangler.toml` dasar (tanpa domain custom dulu — pakai `*.workers.dev` untuk testing).
 - [ ] Deploy "Hello World" Hono ke Workers untuk validasi pipeline CI/CD dasar.
 
