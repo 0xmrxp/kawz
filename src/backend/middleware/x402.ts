@@ -1,18 +1,41 @@
 // x402 payment middleware — seller-side via @x402/hono v2.
 //
-// Production (CDP):  uses @coinbase/x402 facilitator which reads CDP_API_KEY_ID +
-//                   CDP_API_KEY_SECRET and handles JWT auth automatically.
+// Production (CDP):  @coinbase/x402 v0.3.0 only generates auth headers for
+//                   "verify" and "settle". HTTPFacilitatorClient also calls
+//                   getSupported() which needs a "supported" key — that key is
+//                   missing in the package, causing 401 on every cold start.
+//                   buildCdpAuthHeaders() below covers all three operations.
 // Testnet fallback:  x402.org/facilitator (no auth, Base Sepolia only).
-//
-// CDP facilitator supports: Base, Base Sepolia, Polygon, Arbitrum, World, Solana.
-// Bazaar discovery: per-route extensions.bazaar with discoverable: true.
 
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
+import { createAuthHeader, createCorrelationHeader } from "@coinbase/x402";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "../types";
 import { ROUTE_PRICE_MAP } from "../config/pricing";
+
+const CDP_HOST = "api.cdp.coinbase.com";
+const CDP_PATH = "/platform/v2/x402";
+const CDP_URL  = `https://${CDP_HOST}${CDP_PATH}`;
+
+// @coinbase/x402 v0.3.0 bug: createCdpAuthHeaders() returns only {verify, settle}.
+// HTTPFacilitatorClient.getSupported() calls createAuthHeaders("supported") and gets
+// {} back (undefined key), so the Authorization header is missing → CDP 401.
+// This function generates the JWT for all three operations explicitly.
+function buildCdpAuthHeaders(apiKeyId: string, apiKeySecret: string) {
+  return async () => {
+    const make = async (op: string) => ({
+      Authorization: await createAuthHeader(apiKeyId, apiKeySecret, CDP_HOST, `${CDP_PATH}/${op}`),
+      "Correlation-Context": createCorrelationHeader(),
+    });
+    return {
+      verify:    await make("verify"),
+      settle:    await make("settle"),
+      supported: await make("supported"),
+    };
+  };
+}
 
 const TESTNET_FACILITATOR = "https://x402.org/facilitator";
 const TESTNET_NETWORK     = "eip155:84532";  // Base Sepolia
@@ -71,14 +94,14 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
   const isProd    = env.ENVIRONMENT === "production" && !!env.CDP_API_KEY_ID;
   const network   = isProd ? MAINNET_NETWORK : TESTNET_NETWORK;
 
-  // Production: @coinbase/x402 facilitator handles CDP JWT auth automatically.
-  // It reads CDP_API_KEY_ID + CDP_API_KEY_SECRET from process.env.
-  // Testnet: public x402.org facilitator (no auth, Base Sepolia only).
+  // buildCdpAuthHeaders covers verify + settle + supported.
+  // The @coinbase/x402 v0.3.0 package misses "supported", causing 401 on getSupported().
   let facilitatorClient: InstanceType<typeof HTTPFacilitatorClient>;
   if (isProd) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { facilitator } = require("@coinbase/x402");
-    facilitatorClient = new HTTPFacilitatorClient(facilitator);
+    facilitatorClient = new HTTPFacilitatorClient({
+      url: CDP_URL,
+      createAuthHeaders: buildCdpAuthHeaders(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET),
+    });
   } else {
     facilitatorClient = new HTTPFacilitatorClient({ url: TESTNET_FACILITATOR });
   }
