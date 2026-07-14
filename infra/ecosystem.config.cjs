@@ -9,6 +9,7 @@ module.exports = {
       interpreter: 'bun',
       interpreter_args: 'run',
       cwd: '/opt/lobre',
+      exec_mode: 'fork',
       instances: 1,
       autorestart: true,
       watch: false,
