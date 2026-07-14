@@ -2,17 +2,11 @@
 // AST parsing via @babel/parser, LLM inference via Groq (llama-3.3-70b-versatile).
 
 import { Hono } from "hono";
-import Groq from "groq-sdk";
 import type { Variables } from "../types";
 import { buildDependencyTree, checkSyntax, compressTokens } from "../lib/ast-parser";
+import { groqClient } from "../lib/groq";
 
 const coding = new Hono<{ Variables: Variables }>();
-
-let _groq: Groq | null = null;
-function groqClient(apiKey: string): Groq {
-  if (!_groq) _groq = new Groq({ apiKey });
-  return _groq;
-}
 
 // ─── /dependency-tree ────────────────────────────────────────────────────────
 

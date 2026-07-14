@@ -4,17 +4,11 @@
 // Fact checking: Google Fact Check Tools API + Groq fallback
 
 import { Hono } from "hono";
-import Groq from "groq-sdk";
 import type { Variables } from "../types";
 import { embed, cosineSimilarity } from "../lib/embeddings";
+import { groqClient } from "../lib/groq";
 
 const analysis = new Hono<{ Variables: Variables }>();
-
-let _groq: Groq | null = null;
-function groqClient(apiKey: string): Groq {
-  if (!_groq) _groq = new Groq({ apiKey });
-  return _groq;
-}
 
 // ─── /heartbeat ──────────────────────────────────────────────────────────────
 // Cosine similarity between two texts using BGE-base embeddings.

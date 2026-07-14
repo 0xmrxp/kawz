@@ -22,6 +22,8 @@ jobs:
             cd /opt/lobre
             git pull origin main
             bun install --frozen-lockfile
+            bun --cwd src/frontend install --frozen-lockfile
+            bun run build:frontend
             mkdir -p /var/log/lobre
             pm2 reload infra/ecosystem.config.cjs --update-env || pm2 start infra/ecosystem.config.cjs
             pm2 save

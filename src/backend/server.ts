@@ -45,4 +45,5 @@ const port = parseInt(env.PORT);
 
 console.log(`[lobre] listening on http://localhost:${port} (${env.ENVIRONMENT})`);
 
+// Bun picks up the exported { port, fetch } object and starts the HTTP server.
 export default { port, fetch: app.fetch };
