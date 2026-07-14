@@ -25,7 +25,7 @@ export function createMppMiddleware(env: Env): MiddlewareHandler {
       currency:  env.MPP_TEMPO_USDC_ADDRESS, // USDC contract on Base
       recipient: env.EVM_PAYEE_ADDRESS,
     })],
-    realm:     env.BASE_URL,
+    realm:     new URL(env.BASE_URL).host,  // "lobre.lat" — hostname only, no scheme
     secretKey: env.MPP_SECRET_KEY,
   });
 
