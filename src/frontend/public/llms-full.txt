@@ -42,10 +42,10 @@ URL: https://lobre.lat/api/v1/trading/engine/vitals
 
 Live BTC and ETH market vitals from Binance. Falls back to CoinGecko on upstream failure. Cached 10 seconds.
 
-Price: $0.002 USDC
+Price: $0.030 USDC
 Method: GET
-Request: No body required.
-Response: { "success": true, "bundle": "trading_engine", "data": { "source": "binance", "btc": { "price_usd": number, "change_24h_pct": number, "high_24h": number, "low_24h": number, "volume_24h": number }, "eth": { "price_usd": number, "change_24h_pct": number }, "timestamp": number } }
+Request: Optional query param ?symbols=btc,eth (default: btc,eth — use "btc", "eth", or "btc,eth" to filter)
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": "binance", "btc"?: { "price_usd": number, "change_24h_pct": number, "high_24h": number, "low_24h": number, "volume_24h": number }, "eth"?: { "price_usd": number, "change_24h_pct": number }, "timestamp": number } }
 
 ---
 
@@ -78,9 +78,9 @@ URL: https://lobre.lat/api/v1/trading/engine/funding-rates
 
 Perpetual futures funding rates for BTC, ETH, and SOL from Binance Futures. Includes rate as percentage, annualized rate, and next funding timestamp. Cached 15 seconds.
 
-Price: $0.002 USDC
+Price: $0.030 USDC
 Method: GET
-Request: No body required.
+Request: Optional query param ?symbols=BTC,ETH (default: all — BTC,ETH,SOL. Comma-separated filter.)
 Response: { "success": true, "bundle": "trading_engine", "data": { "source": "binance_futures", "rates": [{ "symbol": string, "funding_rate": number, "rate_pct": string, "annualized_pct": number, "next_funding_ms": number, "mark_price": number, "index_price": number }], "btc_annualized_pct": number, "timestamp": number } }
 
 ---
@@ -90,10 +90,10 @@ URL: https://lobre.lat/api/v1/trading/engine/whale-tracker
 
 Recent USDC transfers on Base mainnet above $500,000. Source: Blockscout open-source block explorer (no API key required). Returns up to 25 most recent large transfers. Cached 60 seconds.
 
-Price: $0.008 USDC
+Price: $0.080 USDC
 Method: GET
-Request: No body required.
-Response: { "success": true, "bundle": "trading_engine", "data": { "source": "blockscout_base", "large_transfers": [{ "hash": string, "from": string, "to": string, "amount_usdc": number, "block_number": number, "age_seconds": number }], "total_found": number, "threshold_usd": 500000, "timestamp": number } }
+Request: Optional query param ?threshold=500000 (default: 500000, minimum: 10000 — min USDC transfer USD to include)
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": "blockscout_base", "large_transfers": [{ "hash": string, "from": string, "to": string, "amount_usdc": number, "block_number": number, "age_seconds": number }], "total_found": number, "threshold_usd": number, "timestamp": number } }
 
 ---
 

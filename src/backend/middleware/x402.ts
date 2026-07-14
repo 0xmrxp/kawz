@@ -72,6 +72,7 @@ const BAZAAR_META: Record<string, { category: string; tags: string[] }> = {
   "/api/v1/analysis/memory/context-ranker":   { category: "ai-tools", tags: ["reranking", "retrieval", "rag"] },
   "/api/v1/analysis/memory/bias-detector":    { category: "ai-tools", tags: ["bias", "nlp", "media-analysis"] },
   "/api/v1/analysis/memory/fact-linkage":     { category: "ai-tools", tags: ["fact-check", "verification", "claims"] },
+  "/api/mcp":                                { category: "developer-tools", tags: ["mcp", "agents", "infrastructure", "tools"] },
 };
 
 // Per x402scan DISCOVERY.md spec: input schema must be in accepts[].extensions.bazaar
@@ -86,11 +87,11 @@ const S_GET_QP = (qp: unknown) => ({ type: "object", properties: { input: { type
 const S_POST   = (body: unknown, req: string[]) => ({ type: "object", properties: { input: { type: "object", properties: { type: { type: "string", const: "http" }, method: { type: "string", enum: ["POST","PUT","PATCH"] }, bodyType: { type: "string", enum: ["json"] }, body: { type: "object", properties: body as Record<string,unknown>, required: req } }, required: ["type","method","bodyType","body"], additionalProperties: false } }, required: ["input"] });
 
 const BAZAAR_ACCEPT_SCHEMA: Record<string, { info: unknown; schema: unknown }> = {
-  "/api/v1/trading/engine/vitals":            { info: { input: { type: "http", method: "GET" } },                                                                                            schema: S_GET },
+  "/api/v1/trading/engine/vitals":            { info: { input: { type: "http", method: "GET", queryParams: { symbols: "btc,eth" } } },                                                       schema: S_GET_QP({ symbols: { type: "string", description: "btc, eth or btc,eth. Default: btc,eth" } }) },
   "/api/v1/trading/engine/orderbook-depth":   { info: { input: { type: "http", method: "GET", queryParams: { pair: "BTC/USDT" } } },                                                        schema: S_GET_QP({ pair: { type: "string", description: "Trading pair, default BTC/USDT" } }) },
   "/api/v1/trading/engine/mev-risk-index":    { info: { input: { type: "http", method: "GET" } },                                                                                            schema: S_GET },
-  "/api/v1/trading/engine/funding-rates":     { info: { input: { type: "http", method: "GET" } },                                                                                            schema: S_GET },
-  "/api/v1/trading/engine/whale-tracker":     { info: { input: { type: "http", method: "GET" } },                                                                                            schema: S_GET },
+  "/api/v1/trading/engine/funding-rates":     { info: { input: { type: "http", method: "GET", queryParams: { symbols: "" } } },                                                              schema: S_GET_QP({ symbols: { type: "string", description: "Comma-separated: BTC,ETH,SOL. Omit for all." } }) },
+  "/api/v1/trading/engine/whale-tracker":     { info: { input: { type: "http", method: "GET", queryParams: { threshold: 500000 } } },                                                        schema: S_GET_QP({ threshold: { type: "number", description: "Min USDC transfer USD. Default: 500000" } }) },
   "/api/v1/coding/cache/dependency-tree":     { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "import { Hono } from 'hono';", filename: "server.ts" } } }, schema: S_POST({ code: { type: "string" }, filename: { type: "string" } }, ["code"]) },
   "/api/v1/coding/cache/token-compressor":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { raw_code: "const x = 1; // comment" } } },                         schema: S_POST({ raw_code: { type: "string" } }, ["raw_code"]) },
   "/api/v1/coding/cache/syntax-heartbeat":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "const x = 1;" } } },                                        schema: S_POST({ code: { type: "string" } }, ["code"]) },
@@ -101,6 +102,7 @@ const BAZAAR_ACCEPT_SCHEMA: Record<string, { info: unknown; schema: unknown }> =
   "/api/v1/analysis/memory/context-ranker":   { info: { input: { type: "http", method: "POST", bodyType: "json", body: { query: "machine learning", chunks: ["deep learning","spreadsheets"] } } }, schema: S_POST({ query: { type: "string" }, chunks: { type: "array", items: { type: "string" } } }, ["query","chunks"]) },
   "/api/v1/analysis/memory/bias-detector":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { text: "The radical policy will destroy the economy." } } },         schema: S_POST({ text: { type: "string" } }, ["text"]) },
   "/api/v1/analysis/memory/fact-linkage":     { info: { input: { type: "http", method: "POST", bodyType: "json", body: { claim: "The moon landing was faked.", language: "en" } } },         schema: S_POST({ claim: { type: "string" }, language: { type: "string" } }, ["claim"]) },
+  "/api/mcp":                                { info: { input: { type: "http", method: "POST", bodyType: "json", body: { jsonrpc: "2.0", method: "tools/call", params: { name: "trading-vitals", arguments: {} }, id: 1 } } }, schema: S_POST({ jsonrpc: { type: "string" }, method: { type: "string" }, params: { type: "object" }, id: { type: "number" } }, ["jsonrpc", "method"]) },
 };
 
 const ROUTE_DESCRIPTIONS: Record<string, string> = {
@@ -119,6 +121,7 @@ const ROUTE_DESCRIPTIONS: Record<string, string> = {
   "/api/v1/analysis/memory/context-ranker":   "Re-rank text chunks by semantic relevance to a query using BGE embeddings.",
   "/api/v1/analysis/memory/bias-detector":    "Detect framing bias, sentiment slant, and loaded language in text.",
   "/api/v1/analysis/memory/fact-linkage":     "Verify claims via Google Fact Check API with LLM fallback.",
+  "/api/mcp":                                "MCP server — all 15 Lobre tools via Streamable HTTP Transport.",
 };
 
 export function createX402Middleware(env: Env): MiddlewareHandler {
@@ -150,7 +153,9 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
 
   const routes: Record<string, unknown> = {};
   for (const [path, pricing] of Object.entries(ROUTE_PRICE_MAP)) {
-    const method  = methodForPath(path);
+    const method     = methodForPath(path);
+    const bazaarBase = BAZAAR_ACCEPT_SCHEMA[path];
+    const bazaarMeta = BAZAAR_META[path];
 
     routes[`${method} ${path}`] = {
       accepts: [{
@@ -161,7 +166,11 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
       }],
       description: ROUTE_DESCRIPTIONS[path],
       mimeType: "application/json",
-      extensions: { bazaar: BAZAAR_ACCEPT_SCHEMA[path] },
+      extensions: { bazaar: {
+        ...bazaarBase,
+        ...(bazaarMeta && { category: bazaarMeta.category, tags: bazaarMeta.tags }),
+        discoverable: true,
+      }},
     };
   }
 

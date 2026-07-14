@@ -51,7 +51,7 @@ openapi.get("/openapi.json", (c) => {
           operationId: "tradingVitals",
           summary: "Live market vitals — BTC/ETH price, 24h change, volume",
           tags: ["Trading"],
-          parameters: [],
+          parameters: [{ in: "query", name: "symbols", required: false, schema: { type: "string", default: "btc,eth", enum: ["btc", "eth", "btc,eth"] }, description: "Comma-separated symbols to return. Default: btc,eth" }],
           ...pay("trading.vitals", payTo, network),
           responses: r200({
             type: "object",
@@ -159,7 +159,7 @@ openapi.get("/openapi.json", (c) => {
           operationId: "tradingFundingRates",
           summary: "Perpetual futures funding rates from Binance — BTC, ETH, SOL",
           tags: ["Trading"],
-          parameters: [],
+          parameters: [{ in: "query", name: "symbols", required: false, schema: { type: "string", default: "" }, description: "Comma-separated filter: BTC,ETH,SOL. Omit for all three." }],
           ...pay("trading.fundingRates", payTo, network),
           responses: r200({
             type: "object",
@@ -199,7 +199,7 @@ openapi.get("/openapi.json", (c) => {
           operationId: "tradingWhaleTracker",
           summary: "On-chain large USDC transfer tracker — Base, above $500K",
           tags: ["Trading"],
-          parameters: [],
+          parameters: [{ in: "query", name: "threshold", required: false, schema: { type: "number", minimum: 10000, default: 500000 }, description: "Minimum USDC transfer amount in USD. Default: 500000" }],
           ...pay("trading.whaleTracker", payTo, network),
           responses: r200({
             type: "object",

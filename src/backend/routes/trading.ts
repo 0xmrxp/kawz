@@ -33,10 +33,18 @@ function spot(): InstanceType<typeof Binance> {
 
 trading.get("/vitals", async (c) => {
   const env = c.get("env");
+  const symbolsRaw = (c.req.query("symbols") ?? "btc,eth").toLowerCase();
+  const symbols = symbolsRaw.split(",").map(s => s.trim()).filter(s => s === "btc" || s === "eth");
+  const want = symbols.length > 0 ? symbols : ["btc", "eth"];
   try {
-    const data = await getOrFetch(
+    const full = await getOrFetch(
       env.REDIS_URL, "trading:vitals", fetchVitals, { ttlSeconds: TTL.vitals }
     );
+    const data: Record<string, unknown> = {
+      source: full.source, engine_status: full.engine_status, timestamp: full.timestamp,
+    };
+    if (want.includes("btc")) data.btc = full.btc;
+    if (want.includes("eth")) data.eth = full.eth;
     return c.json({ success: true, bundle: "trading_engine", data });
   } catch {
     return c.json({ success: false, error: "upstream unavailable" }, 503);
@@ -140,10 +148,20 @@ async function fetchOrderbookDepth(pair: string) {
 
 trading.get("/funding-rates", async (c) => {
   const env = c.get("env");
+  const symbolsRaw = c.req.query("symbols") ?? "";
+  const filterSymbols = symbolsRaw
+    ? symbolsRaw.toUpperCase().split(",").map(s => s.trim()).filter(Boolean)
+    : [];
   try {
-    const data = await getOrFetch(
+    const full = await getOrFetch(
       env.REDIS_URL, "trading:funding-rates", fetchFundingRates, { ttlSeconds: TTL.fundingRates }
     );
+    const data = filterSymbols.length === 0 ? full : {
+      ...full,
+      rates: (full.rates as { symbol?: string }[]).filter(r =>
+        filterSymbols.some(s => String(r.symbol ?? "").includes(s))
+      ),
+    };
     return c.json({ success: true, bundle: "trading_engine", data });
   } catch {
     return c.json({ success: false, error: "upstream unavailable" }, 503);
@@ -186,10 +204,15 @@ async function fetchFundingRates() {
 
 trading.get("/whale-tracker", async (c) => {
   const env = c.get("env");
+  const thresholdRaw = c.req.query("threshold");
+  const threshold = thresholdRaw ? Math.max(10000, parseInt(thresholdRaw)) : WHALE_THRESHOLD;
+  const cacheKey = threshold === WHALE_THRESHOLD
+    ? "trading:whale-tracker"
+    : `trading:whale-tracker:${threshold}`;
   try {
     const data = await getOrFetch(
-      env.REDIS_URL, "trading:whale-tracker",
-      () => fetchWhaleTransfers(env.BLOCKSCOUT_BASE_URL),
+      env.REDIS_URL, cacheKey,
+      () => fetchWhaleTransfers(env.BLOCKSCOUT_BASE_URL, threshold),
       { ttlSeconds: TTL.whaleTracks }
     );
     return c.json({ success: true, bundle: "trading_engine", data });
@@ -201,7 +224,7 @@ trading.get("/whale-tracker", async (c) => {
 const USDC_BASE       = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const WHALE_THRESHOLD = 500_000; // USDC
 
-async function fetchWhaleTransfers(blockscoutBaseUrl: string) {
+async function fetchWhaleTransfers(blockscoutBaseUrl: string, threshold = WHALE_THRESHOLD) {
   const url =
     `${blockscoutBaseUrl}/api?module=account&action=tokentx` +
     `&contractaddress=${USDC_BASE}&sort=desc&offset=100&page=1`;
@@ -219,7 +242,7 @@ async function fetchWhaleTransfers(blockscoutBaseUrl: string) {
   }
 
   const whales = json.result
-    .filter((tx) => parseInt(tx.value ?? "0") / 1e6 >= WHALE_THRESHOLD)
+    .filter((tx) => parseInt(tx.value ?? "0") / 1e6 >= threshold)
     .slice(0, 25)
     .map((tx) => ({
       hash:         tx.hash,
@@ -234,7 +257,7 @@ async function fetchWhaleTransfers(blockscoutBaseUrl: string) {
     source:          "blockscout_base",
     large_transfers: whales,
     total_found:     whales.length,
-    threshold_usd:   WHALE_THRESHOLD,
+    threshold_usd:   threshold,
     timestamp:       Date.now(),
   };
 }

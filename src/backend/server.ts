@@ -32,11 +32,11 @@ app.get("/health", (c) =>
 // Input schemas per route — added to resource.inputSchema in 402 challenge.
 // mppscan requires this field to register endpoints without "Input schema is missing" warning.
 const ROUTE_INPUT_SCHEMAS: Record<string, unknown> = {
-  "/api/v1/trading/engine/vitals":              { type: "object", properties: {} },
+  "/api/v1/trading/engine/vitals":              { type: "object", properties: { symbols: { type: "string", default: "btc,eth", description: "btc, eth or btc,eth" } } },
   "/api/v1/trading/engine/orderbook-depth":     { type: "object", properties: { pair: { type: "string", description: "Trading pair (default: BTC/USDT)", example: "ETH/USDT" } } },
   "/api/v1/trading/engine/mev-risk-index":      { type: "object", properties: {} },
-  "/api/v1/trading/engine/funding-rates":       { type: "object", properties: {} },
-  "/api/v1/trading/engine/whale-tracker":       { type: "object", properties: {} },
+  "/api/v1/trading/engine/funding-rates":       { type: "object", properties: { symbols: { type: "string", description: "Comma-separated: BTC,ETH,SOL. Omit for all." } } },
+  "/api/v1/trading/engine/whale-tracker":       { type: "object", properties: { threshold: { type: "number", minimum: 10000, default: 500000, description: "Min USDC transfer USD" } } },
   "/api/v1/coding/cache/dependency-tree":       { type: "object", required: ["code"], properties: { code: { type: "string" }, filename: { type: "string" } } },
   "/api/v1/coding/cache/token-compressor":      { type: "object", required: ["raw_code"], properties: { raw_code: { type: "string" } } },
   "/api/v1/coding/cache/syntax-heartbeat":      { type: "object", required: ["code"], properties: { code: { type: "string" } } },
@@ -47,6 +47,7 @@ const ROUTE_INPUT_SCHEMAS: Record<string, unknown> = {
   "/api/v1/analysis/memory/context-ranker":     { type: "object", required: ["query", "chunks"], properties: { query: { type: "string" }, chunks: { type: "array", items: { type: "string" } } } },
   "/api/v1/analysis/memory/bias-detector":      { type: "object", required: ["text"], properties: { text: { type: "string" } } },
   "/api/v1/analysis/memory/fact-linkage":       { type: "object", required: ["claim"], properties: { claim: { type: "string" }, language: { type: "string", default: "en" } } },
+  "/api/mcp":                                   { type: "object", required: ["jsonrpc", "method"], properties: { jsonrpc: { type: "string", const: "2.0" }, method: { type: "string" }, params: { type: "object" }, id: { type: "number" } } },
 };
 
 // Bazaar accept schemas — injected into accepts[i].extensions.bazaar in 402 challenge.
@@ -60,11 +61,11 @@ const _SGQP  = (qp: unknown) => ({ type: "object", properties: { input: { type: 
 const _SP    = (body: unknown, req: string[]) => ({ type: "object", properties: { input: { type: "object", properties: { type: { type: "string", const: "http" }, method: { type: "string", enum: ["POST","PUT","PATCH"] }, bodyType: { type: "string", enum: ["json"] }, body: { type: "object", properties: body as Record<string,unknown>, required: req } }, required: ["type","method","bodyType","body"], additionalProperties: false } }, required: ["input"] });
 
 const BAZAAR_ACCEPT_SCHEMAS: Record<string, { info: unknown; schema: unknown }> = {
-  "/api/v1/trading/engine/vitals":            { info: { input: { type: "http", method: "GET" } },                                                                                            schema: _SG },
+  "/api/v1/trading/engine/vitals":            { info: { input: { type: "http", method: "GET", queryParams: { symbols: "btc,eth" } } },                                                       schema: _SGQP({ symbols: { type: "string", description: "btc, eth or btc,eth. Default: btc,eth" } }) },
   "/api/v1/trading/engine/orderbook-depth":   { info: { input: { type: "http", method: "GET", queryParams: { pair: "BTC/USDT" } } },                                                        schema: _SGQP({ pair: { type: "string", description: "Trading pair, default BTC/USDT" } }) },
   "/api/v1/trading/engine/mev-risk-index":    { info: { input: { type: "http", method: "GET" } },                                                                                            schema: _SG },
-  "/api/v1/trading/engine/funding-rates":     { info: { input: { type: "http", method: "GET" } },                                                                                            schema: _SG },
-  "/api/v1/trading/engine/whale-tracker":     { info: { input: { type: "http", method: "GET" } },                                                                                            schema: _SG },
+  "/api/v1/trading/engine/funding-rates":     { info: { input: { type: "http", method: "GET", queryParams: { symbols: "" } } },                                                              schema: _SGQP({ symbols: { type: "string", description: "Comma-separated: BTC,ETH,SOL. Omit for all." } }) },
+  "/api/v1/trading/engine/whale-tracker":     { info: { input: { type: "http", method: "GET", queryParams: { threshold: 500000 } } },                                                        schema: _SGQP({ threshold: { type: "number", description: "Min USDC transfer USD. Default: 500000" } }) },
   "/api/v1/coding/cache/dependency-tree":     { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "import { Hono } from 'hono';", filename: "server.ts" } } }, schema: _SP({ code: { type: "string" }, filename: { type: "string" } }, ["code"]) },
   "/api/v1/coding/cache/token-compressor":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { raw_code: "const x = 1; // comment" } } },                         schema: _SP({ raw_code: { type: "string" } }, ["raw_code"]) },
   "/api/v1/coding/cache/syntax-heartbeat":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "const x = 1;" } } },                                        schema: _SP({ code: { type: "string" } }, ["code"]) },
@@ -75,12 +76,14 @@ const BAZAAR_ACCEPT_SCHEMAS: Record<string, { info: unknown; schema: unknown }> 
   "/api/v1/analysis/memory/context-ranker":   { info: { input: { type: "http", method: "POST", bodyType: "json", body: { query: "machine learning", chunks: ["deep learning","spreadsheets"] } } }, schema: _SP({ query: { type: "string" }, chunks: { type: "array", items: { type: "string" } } }, ["query","chunks"]) },
   "/api/v1/analysis/memory/bias-detector":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { text: "The radical policy will destroy the economy." } } },         schema: _SP({ text: { type: "string" } }, ["text"]) },
   "/api/v1/analysis/memory/fact-linkage":     { info: { input: { type: "http", method: "POST", bodyType: "json", body: { claim: "The moon landing was faked.", language: "en" } } },         schema: _SP({ claim: { type: "string" }, language: { type: "string" } }, ["claim"]) },
+  "/api/mcp":                                { info: { input: { type: "http", method: "POST", bodyType: "json", body: { jsonrpc: "2.0", method: "tools/call", params: { name: "trading-vitals", arguments: {} }, id: 1 } } }, schema: _SP({ jsonrpc: { type: "string" }, method: { type: "string" }, params: { type: "object" }, id: { type: "number" } }, ["jsonrpc", "method"]) },
 };
 
 // Populate 402 response body, inject resource.inputSchema + accepts[].extensions.bazaar.
 // @x402/hono v2 puts the challenge in payment-required header; body stays {}.
 // paymentMiddleware strips custom fields from accepts[] items, so we post-process here.
-app.use("/v1/*", async (c, next) => {
+// Uses "*" so it also catches /mcp 402 responses in addition to /v1/*.
+app.use("*", async (c, next) => {
   await next();
   if (c.res.status === 402) {
     const challenged = c.res.headers.get("payment-required");
@@ -138,10 +141,12 @@ app.use("/v1/*", async (c, next) => {
   }
 });
 
-// Payment middleware — applied to all /v1/* routes
+// Payment middleware — applied to all /v1/* routes and /mcp
 // Dev mode: pass-through unless FORCE_PAYMENT=true. Production: real x402 + MPP.
 app.use("/v1/*", createX402Middleware(env));
 app.use("/v1/*", createMppMiddleware(env));
+app.use("/mcp",  createX402Middleware(env));
+app.use("/mcp",  createMppMiddleware(env));
 
 // Route bundles
 app.route("/v1/trading/engine", trading);

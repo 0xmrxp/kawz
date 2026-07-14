@@ -36,11 +36,11 @@ WORKFLOW:
 3. mcp__agentcash__fetch(url="<endpoint>", method="GET"|"POST", body={...}) — execute.
 
 TRADING INTELLIGENCE — GET, no body:
-  https://lobre.lat/api/v1/trading/engine/vitals           $0.030  BTC/ETH live price, 24h change, volume
-  https://lobre.lat/api/v1/trading/engine/orderbook-depth  $0.050  Bids/asks, spread, imbalance — ?pair=ETH/USDT to change pair
+  https://lobre.lat/api/v1/trading/engine/vitals           $0.030  BTC/ETH live price, 24h change, volume — ?symbols=btc,eth (or btc or eth)
+  https://lobre.lat/api/v1/trading/engine/orderbook-depth  $0.050  Bids/asks, spread, imbalance — ?pair=ETH/USDT (default: BTC/USDT)
   https://lobre.lat/api/v1/trading/engine/mev-risk-index   $0.040  MEV sandwich risk score 0–100 for current Base block
-  https://lobre.lat/api/v1/trading/engine/funding-rates    $0.030  BTC/ETH/SOL perpetual futures funding rates from Binance
-  https://lobre.lat/api/v1/trading/engine/whale-tracker    $0.080  USDC transfers on Base above $500K (Blockscout)
+  https://lobre.lat/api/v1/trading/engine/funding-rates    $0.030  BTC/ETH/SOL perpetual futures funding rates — ?symbols=BTC,ETH (omit for all)
+  https://lobre.lat/api/v1/trading/engine/whale-tracker    $0.080  USDC transfers on Base — ?threshold=500000 (min USD, default 500000)
 
 CODING CACHE — POST, send JSON body:
   https://lobre.lat/api/v1/coding/cache/dependency-tree    $0.030  body: { "code": "...", "filename": "app.ts" }
@@ -82,6 +82,7 @@ Add to Claude Desktop config (~/.claude/claude_desktop_config.json):
 
 MCP server direct URL: https://lobre.lat/api/mcp
 All 15 tools mirror the REST endpoints. AgentCash handles payment via MCP automatically.
+Note: /api/mcp requires x402/MPP payment ($0.030 per request). Only x402-capable MCP clients supported.
 
 ---
 
@@ -90,9 +91,10 @@ All 15 tools mirror the REST endpoints. AgentCash handles payment via MCP automa
 ### Bundle 1 — Trading Intelligence (from $0.030)
 
 GET  /api/v1/trading/engine/vitals
-  price: $0.030
-  desc:  Live BTC/ETH price, 24h change, volume. Binance primary, CoinGecko fallback.
-  cache: 10s Redis
+  price:  $0.030
+  desc:   Live BTC/ETH price, 24h change, volume. Binance primary, CoinGecko fallback.
+  params: ?symbols=btc,eth (optional, default: btc,eth — use btc or eth to filter)
+  cache:  10s Redis
 
 GET  /api/v1/trading/engine/orderbook-depth
   price:  $0.050
@@ -107,15 +109,17 @@ GET  /api/v1/trading/engine/mev-risk-index
   cache: 30s Redis
 
 GET  /api/v1/trading/engine/funding-rates
-  price: $0.030
-  desc:  BTC/ETH/SOL perpetual futures funding rates from Binance.
-         Includes annualized rate and next funding timestamp.
-  cache: 15s Redis
+  price:  $0.030
+  desc:   BTC/ETH/SOL perpetual futures funding rates from Binance.
+          Includes annualized rate and next funding timestamp.
+  params: ?symbols=BTC,ETH (optional, comma-separated — omit for all three)
+  cache:  15s Redis
 
 GET  /api/v1/trading/engine/whale-tracker
-  price: $0.080
-  desc:  USDC transfers on Base above $500K. Source: Blockscout (no API key).
-  cache: 60s Redis
+  price:  $0.080
+  desc:   USDC transfers on Base above threshold. Source: Blockscout (no API key).
+  params: ?threshold=500000 (optional, min USD amount, default 500000, min 10000)
+  cache:  60s Redis
 
 ### Bundle 2 — Coding Cache (from $0.030)
 

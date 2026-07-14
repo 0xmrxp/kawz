@@ -4,24 +4,26 @@ export interface EndpointPrice {
 }
 
 export const PRICING: Record<string, EndpointPrice> = {
-  // Trading Intelligence — minimum $0.030 (raised from $0.002–$0.008)
+  // Trading Intelligence
   "trading.vitals":             { usdAmount: "0.030000", atomicUsdc: "30000" },
   "trading.orderbookDepth":     { usdAmount: "0.050000", atomicUsdc: "50000" },
   "trading.mevRiskIndex":       { usdAmount: "0.040000", atomicUsdc: "40000" },
   "trading.fundingRates":       { usdAmount: "0.030000", atomicUsdc: "30000" },
   "trading.whaleTracker":       { usdAmount: "0.080000", atomicUsdc: "80000" },
-  // Coding Cache — minimum $0.030 (raised from $0.002–$0.006)
+  // Coding Cache
   "coding.dependencyTree":      { usdAmount: "0.030000", atomicUsdc: "30000" },
   "coding.tokenCompressor":     { usdAmount: "0.030000", atomicUsdc: "30000" },
   "coding.syntaxHeartbeat":     { usdAmount: "0.030000", atomicUsdc: "30000" },
   "coding.refactorSuggest":     { usdAmount: "0.050000", atomicUsdc: "50000" },
   "coding.securityAudit":       { usdAmount: "0.060000", atomicUsdc: "60000" },
-  // Research Pruner — minimum $0.030 (raised from $0.003–$0.012)
+  // Research Pruner
   "analysis.heartbeat":         { usdAmount: "0.030000", atomicUsdc: "30000" },
   "analysis.entityExtractor":   { usdAmount: "0.060000", atomicUsdc: "60000" },
   "analysis.contextRanker":     { usdAmount: "0.050000", atomicUsdc: "50000" },
   "analysis.biasDetector":      { usdAmount: "0.050000", atomicUsdc: "50000" },
   "analysis.factLinkage":       { usdAmount: "0.120000", atomicUsdc: "120000" },
+  // MCP server — per-request flat rate
+  "mcp.request":                { usdAmount: "0.030000", atomicUsdc: "30000" },
 };
 
 // Route path → pricing key map — used by payment middleware in server.ts
@@ -41,4 +43,5 @@ export const ROUTE_PRICE_MAP: Record<string, EndpointPrice> = {
   "/api/v1/analysis/memory/context-ranker":     PRICING["analysis.contextRanker"],
   "/api/v1/analysis/memory/bias-detector":      PRICING["analysis.biasDetector"],
   "/api/v1/analysis/memory/fact-linkage":       PRICING["analysis.factLinkage"],
+  "/api/mcp":                                   PRICING["mcp.request"],
 };
