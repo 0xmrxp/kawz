@@ -31,7 +31,7 @@ export function loadEnv(): Env {
   // In production every critical var must be present — fail fast at startup.
   if (environment === "production") {
     const required: (keyof Env)[] = [
-      "BASE_URL", "REDIS_URL", "GROQ_API_KEY", "QDRANT_URL",
+      "BASE_URL", "REDIS_URL", "QDRANT_URL",
       "EVM_PAYEE_ADDRESS", "MPP_SECRET_KEY", "MPP_TEMPO_USDC_ADDRESS",
     ];
     for (const key of required) {
