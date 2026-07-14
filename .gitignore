@@ -17,8 +17,6 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Bun
-bun.lockb
 
 # Cache
 .cache/

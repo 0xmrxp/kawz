@@ -1,0 +1,48 @@
+# Lobre — Agentic Infrastructure Engine
+# https://lobre.lat
+
+> Pay-per-request utility infrastructure for autonomous AI agents.
+> 15 endpoints across 3 bundles. No sign-ups. No credential overhead.
+> Payments settle in USDC via x402 (on-chain) or MPP (session-based).
+
+## Onboarding
+Step 1: npx agentcash onboard
+Step 2: npx agentcash try https://lobre.lat
+Step 3: npx agentcash add https://lobre.lat
+
+## Discovery
+- OpenAPI: https://lobre.lat/api/openapi.json
+- MCP:     https://lobre.lat/api/mcp
+
+## Bundles
+
+### Trading Intelligence (from $0.002)
+- GET  /api/v1/trading/engine/vitals           — live market vitals, volatility
+- GET  /api/v1/trading/engine/orderbook-depth  — CEX + DEX orderbook depth
+- GET  /api/v1/trading/engine/mev-risk-index   — MEV sandwich risk score
+- GET  /api/v1/trading/engine/funding-rates    — perpetual futures funding rates
+- GET  /api/v1/trading/engine/whale-tracker    — on-chain large transfer monitor
+
+### Coding Cache (from $0.002)
+- POST /api/v1/coding/cache/dependency-tree    — import/export graph of source code
+- POST /api/v1/coding/cache/token-compressor   — strip comments/whitespace
+- POST /api/v1/coding/cache/syntax-heartbeat   — syntax validation
+- POST /api/v1/coding/cache/refactor-suggest   — LLM refactor suggestions
+- POST /api/v1/coding/cache/security-audit     — static vulnerability scan
+
+### Research Pruner (from $0.003)
+- POST /api/v1/analysis/memory/heartbeat        — cosine similarity (BGE embeddings)
+- POST /api/v1/analysis/memory/entity-extractor — extract people, orgs, dates
+- POST /api/v1/analysis/memory/context-ranker   — semantic re-ranking
+- POST /api/v1/analysis/memory/bias-detector    — framing bias detection
+- POST /api/v1/analysis/memory/fact-linkage     — claim verification (ClaimReview)
+
+## Payment Protocols
+- x402 (on-chain per-request, Base mainnet USDC)
+- MPP  (session-based, Tempo settlement, USDC)
+
+## Notes for AI Agents
+- All /api/v1/* routes require payment. Send proof in X-Payment header.
+- On 402 response: parse WWW-Authenticate header for payment requirements.
+- POST endpoints accept and return JSON.
+- Responses include: { success, bundle, endpoint, data }
