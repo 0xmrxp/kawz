@@ -51,6 +51,7 @@ openapi.get("/openapi.json", (c) => {
           operationId: "tradingVitals",
           summary: "Live market vitals — BTC/ETH price, 24h change, volume",
           tags: ["Trading"],
+          parameters: [],
           ...pay("trading.vitals", payTo, network),
           responses: r200({
             type: "object",
@@ -127,6 +128,7 @@ openapi.get("/openapi.json", (c) => {
           operationId: "tradingMevRisk",
           summary: "MEV risk index — sandwich attack probability for current Base block",
           tags: ["Trading"],
+          parameters: [],
           ...pay("trading.mevRiskIndex", payTo, network),
           responses: r200({
             type: "object",
@@ -157,6 +159,7 @@ openapi.get("/openapi.json", (c) => {
           operationId: "tradingFundingRates",
           summary: "Perpetual futures funding rates from Binance — BTC, ETH, SOL",
           tags: ["Trading"],
+          parameters: [],
           ...pay("trading.fundingRates", payTo, network),
           responses: r200({
             type: "object",
@@ -196,6 +199,7 @@ openapi.get("/openapi.json", (c) => {
           operationId: "tradingWhaleTracker",
           summary: "On-chain large USDC transfer tracker — Base, above $500K",
           tags: ["Trading"],
+          parameters: [],
           ...pay("trading.whaleTracker", payTo, network),
           responses: r200({
             type: "object",

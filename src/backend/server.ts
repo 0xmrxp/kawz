@@ -91,11 +91,26 @@ app.use("/v1/*", async (c, next) => {
         const rawPath = c.req.path;
         const lookupPath = rawPath.startsWith("/v1/") ? `/api${rawPath}` : rawPath;
 
-        // resource.inputSchema — create resource if @x402/hono v2 omits it
+        // resource.inputSchema — injected at top-level and into each accepts[] item
+        // for maximum scanner compatibility (mppscan checks both locations).
+        // x402 v2 has no top-level resource field; decoded.resource starts undefined.
+        // If somehow it's a URL string (older spec), preserve it under .url.
         const inputSchema = ROUTE_INPUT_SCHEMAS[lookupPath];
         if (inputSchema) {
-          if (!decoded.resource) decoded.resource = {};
-          decoded.resource.inputSchema = inputSchema;
+          if (typeof decoded.resource === "string") {
+            decoded.resource = { url: decoded.resource, inputSchema };
+          } else {
+            if (!decoded.resource) decoded.resource = {};
+            decoded.resource.inputSchema = inputSchema;
+          }
+          // Also inject into each accepts[] item so mppscan finds it regardless of location
+          if (Array.isArray(decoded.accepts)) {
+            for (const accept of decoded.accepts) {
+              if (accept && typeof accept === "object") {
+                (accept as Record<string, unknown>).inputSchema = inputSchema;
+              }
+            }
+          }
         }
 
         // extensions.bazaar — inject into both locations for maximum scanner compatibility:
