@@ -106,21 +106,21 @@ const BAZAAR_ACCEPT_SCHEMA: Record<string, { info: unknown; schema: unknown }> =
 };
 
 const ROUTE_DESCRIPTIONS: Record<string, string> = {
-  "/api/v1/trading/engine/vitals":            "Live BTC/ETH price, 24h change and volume from Binance.",
+  "/api/v1/trading/engine/vitals":            "Live BTC/ETH price, 24h change and volume from CEX feeds.",
   "/api/v1/trading/engine/orderbook-depth":   "CEX orderbook bids/asks, spread and imbalance for a trading pair.",
   "/api/v1/trading/engine/mev-risk-index":    "MEV sandwich attack risk score 0-100 for the current Base block.",
-  "/api/v1/trading/engine/funding-rates":     "Perpetual futures funding rates for BTC, ETH, SOL from Binance Futures.",
-  "/api/v1/trading/engine/whale-tracker":     "Recent USDC transfers on Base above $500K via Blockscout.",
+  "/api/v1/trading/engine/funding-rates":     "Perpetual futures funding rates for BTC, ETH, SOL from CEX futures markets.",
+  "/api/v1/trading/engine/whale-tracker":     "Recent large USDC transfers on Base. On-chain data.",
   "/api/v1/coding/cache/dependency-tree":     "Parse import/export dependency graph from JavaScript or TypeScript source.",
   "/api/v1/coding/cache/token-compressor":    "Strip comments and whitespace from source code to minimize LLM token usage.",
   "/api/v1/coding/cache/syntax-heartbeat":    "Validate JavaScript/TypeScript/JSX syntax and return parse errors.",
   "/api/v1/coding/cache/refactor-suggest":    "LLM-powered refactoring suggestions with severity ratings.",
   "/api/v1/coding/cache/security-audit":      "Static security audit — detect SQL injection, XSS, hardcoded secrets.",
-  "/api/v1/analysis/memory/heartbeat":        "Cosine similarity between two texts using BGE-base-en-v1.5 embeddings.",
+  "/api/v1/analysis/memory/heartbeat":        "Cosine similarity between two texts using sentence embeddings.",
   "/api/v1/analysis/memory/entity-extractor": "Extract named entities (people, orgs, dates, locations, money) from text.",
-  "/api/v1/analysis/memory/context-ranker":   "Re-rank text chunks by semantic relevance to a query using BGE embeddings.",
+  "/api/v1/analysis/memory/context-ranker":   "Re-rank text chunks by semantic relevance to a query using sentence embeddings.",
   "/api/v1/analysis/memory/bias-detector":    "Detect framing bias, sentiment slant, and loaded language in text.",
-  "/api/v1/analysis/memory/fact-linkage":     "Verify claims via Google Fact Check API with LLM fallback.",
+  "/api/v1/analysis/memory/fact-linkage":     "Verify claims via fact-check databases with LLM fallback.",
   "/api/mcp":                                "MCP server — all 15 Lobre tools via Streamable HTTP Transport.",
 };
 

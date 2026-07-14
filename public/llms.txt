@@ -92,34 +92,34 @@ Note: /api/mcp requires x402/MPP payment ($0.030 per request). Only x402-capable
 
 GET  /api/v1/trading/engine/vitals
   price:  $0.030
-  desc:   Live BTC/ETH price, 24h change, volume. Binance primary, CoinGecko fallback.
+  desc:   Live BTC/ETH price, 24h change, and volume from CEX feeds.
   params: ?symbols=btc,eth (optional, default: btc,eth — use btc or eth to filter)
-  cache:  10s Redis
+  cache:  10s
 
 GET  /api/v1/trading/engine/orderbook-depth
   price:  $0.050
-  desc:   Binance orderbook bids/asks, spread, imbalance.
+  desc:   CEX orderbook bids/asks, spread, and book imbalance (-1 to 1).
   params: ?pair=ETH/USDT (default: BTC/USDT)
-  cache:  5s Redis
+  cache:  5s
 
 GET  /api/v1/trading/engine/mev-risk-index
   price: $0.040
   desc:  MEV sandwich attack risk score 0–100 for current Base block.
-         High-gas tx ratio + repeated-sender heuristics.
-  cache: 30s Redis
+         Derived from gas price distribution and repeated-sender heuristics.
+  cache: 30s
 
 GET  /api/v1/trading/engine/funding-rates
   price:  $0.030
-  desc:   BTC/ETH/SOL perpetual futures funding rates from Binance.
+  desc:   BTC/ETH/SOL perpetual futures funding rates from CEX futures markets.
           Includes annualized rate and next funding timestamp.
   params: ?symbols=BTC,ETH (optional, comma-separated — omit for all three)
-  cache:  15s Redis
+  cache:  15s
 
 GET  /api/v1/trading/engine/whale-tracker
   price:  $0.080
-  desc:   USDC transfers on Base above threshold. Source: Blockscout (no API key).
+  desc:   Recent large USDC transfers on Base. On-chain data.
   params: ?threshold=500000 (optional, min USD amount, default 500000, min 10000)
-  cache:  60s Redis
+  cache:  60s
 
 ### Bundle 2 — Coding Cache (from $0.030)
 
@@ -200,8 +200,8 @@ MPP   session-based, Tempo settlement, USDC on Base
 ## Notes for AI Agents
 
 - All /api/v1/* routes require payment. AgentCash handles 402 → payment → retry automatically.
-- Trading GET endpoints: no request body. Optional query param ?pair= for orderbook-depth.
+- Trading GET endpoints: no request body. Optional query params documented per-endpoint above.
 - POST endpoints: Content-Type: application/json required.
 - Successful responses always include: { success: true, bundle: "...", data: {...} }
-- 503 means upstream (Binance, Blockscout, LLM) is temporarily unavailable — retry is safe.
-- Redis cache prevents redundant upstream calls. Fresh data on every cache miss.
+- 503 means an upstream data source is temporarily unavailable — retry is safe.
+- Short-TTL caching prevents redundant upstream calls. Fresh data on every cache miss.

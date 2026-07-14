@@ -10,12 +10,12 @@ WORKFLOW:
 2. mcp__agentcash__check_endpoint_schema(url="<endpoint>", method="POST") — check request body schema before POST calls.
 3. mcp__agentcash__fetch(url="<endpoint>", method="GET"|"POST", body={...}) — execute the call.
 
-TRADING INTELLIGENCE — GET, no body required:
-  https://lobre.lat/api/v1/trading/engine/vitals           $0.030  BTC/ETH live price, 24h change, volume (Binance/CoinGecko)
-  https://lobre.lat/api/v1/trading/engine/orderbook-depth  $0.050  Bids/asks, spread, imbalance — append ?pair=ETH/USDT to change pair
+TRADING INTELLIGENCE — GET, optional query params:
+  https://lobre.lat/api/v1/trading/engine/vitals           $0.030  BTC/ETH live price, 24h change, volume — ?symbols=btc,eth
+  https://lobre.lat/api/v1/trading/engine/orderbook-depth  $0.050  Bids/asks, spread, imbalance — ?pair=ETH/USDT
   https://lobre.lat/api/v1/trading/engine/mev-risk-index   $0.040  MEV sandwich attack risk score 0–100 for current Base block
-  https://lobre.lat/api/v1/trading/engine/funding-rates    $0.030  BTC/ETH/SOL perpetual futures funding rates from Binance
-  https://lobre.lat/api/v1/trading/engine/whale-tracker    $0.080  USDC transfers on Base above $500K (Blockscout)
+  https://lobre.lat/api/v1/trading/engine/funding-rates    $0.030  BTC/ETH/SOL perpetual futures funding rates — ?symbols=BTC,ETH
+  https://lobre.lat/api/v1/trading/engine/whale-tracker    $0.080  Large USDC transfers on Base — ?threshold=500000
 
 CODING CACHE — POST, send JSON body:
   https://lobre.lat/api/v1/coding/cache/dependency-tree    $0.030  body: { "code": "...", "filename": "app.ts" }
@@ -60,24 +60,27 @@ const endpoints = [
     method: "GET",
     path: "/api/v1/trading/engine/vitals",
     price: "$0.030",
-    summary: "Live BTC/ETH price, 24h change, and volume from Binance. Automatic CoinGecko fallback on upstream failure.",
-    request: "No body required.",
-    response: '{ "success": true, "data": { "source": "binance", "btc": { "price_usd": 67420, "change_24h_pct": 2.4, "volume_24h": 28441 }, "eth": { "price_usd": 3812, "change_24h_pct": 1.1 }, "timestamp": 1720000000000 } }',
+    params: "?symbols=btc,eth (optional — btc, eth, or btc,eth)",
+    summary: "Live BTC/ETH price, 24h change, and volume aggregated from major CEX feeds.",
+    request: "No body required. Optional: ?symbols=btc,eth",
+    response: '{ "success": true, "data": { "btc": { "price_usd": 67420, "change_24h_pct": 2.4, "volume_24h": 28441 }, "eth": { "price_usd": 3812, "change_24h_pct": 1.1 }, "timestamp": 1720000000000 } }',
   },
   {
     bundle: "Trading Intelligence",
     method: "GET",
     path: "/api/v1/trading/engine/orderbook-depth",
     price: "$0.050",
-    summary: "Binance orderbook bids/asks for a pair. Append ?pair=ETH/USDT to change pair (default BTC/USDT). Returns spread and book imbalance.",
-    request: "?pair=BTC/USDT (optional query param)",
-    response: '{ "success": true, "data": { "pair": "BTC/USDT", "best_bid": 67400, "best_ask": 67410, "spread_usd": 10, "spread_pct": 0.0149, "imbalance": -0.08, "bids": [[67400, 1.2], ...], "asks": [[67410, 0.9], ...] } }',
+    params: "?pair=ETH/USDT (optional, default BTC/USDT)",
+    summary: "CEX orderbook bids/asks for a trading pair. Returns spread, top-10 depth per side, and book imbalance (−1 to 1).",
+    request: "No body required. Optional: ?pair=ETH/USDT",
+    response: '{ "success": true, "data": { "pair": "BTC/USDT", "best_bid": 67400, "best_ask": 67410, "spread_usd": 10, "spread_pct": 0.0149, "imbalance": -0.08, "bids": [[67400, 1.2]], "asks": [[67410, 0.9]] } }',
   },
   {
     bundle: "Trading Intelligence",
     method: "GET",
     path: "/api/v1/trading/engine/mev-risk-index",
     price: "$0.040",
+    params: null,
     summary: "MEV sandwich attack risk score (0–100) for the current Base block. Derived from gas price distribution and repeated-sender heuristics.",
     request: "No body required.",
     response: '{ "success": true, "data": { "risk_score": 18, "risk_level": "low", "block_number": 16780000, "total_txs": 142, "high_gas_ratio_pct": 8 } }',
@@ -87,8 +90,9 @@ const endpoints = [
     method: "GET",
     path: "/api/v1/trading/engine/funding-rates",
     price: "$0.030",
-    summary: "Perpetual futures funding rates for BTC, ETH, and SOL from Binance Futures. Includes annualized rate and next funding timestamp.",
-    request: "No body required.",
+    params: "?symbols=BTC,ETH (optional — comma-separated, omit for all)",
+    summary: "Perpetual futures funding rates for BTC, ETH, and SOL from CEX futures markets. Includes annualized rate and next funding timestamp.",
+    request: "No body required. Optional: ?symbols=BTC,ETH",
     response: '{ "success": true, "data": { "rates": [{ "symbol": "BTC/USDT:USDT", "funding_rate": 0.0001, "rate_pct": "0.0100%", "annualized_pct": 10.95, "next_funding_ms": 1720008000000 }] } }',
   },
   {
@@ -96,8 +100,9 @@ const endpoints = [
     method: "GET",
     path: "/api/v1/trading/engine/whale-tracker",
     price: "$0.080",
-    summary: "Recent USDC transfers on Base above $500K. Sourced from Blockscout — no API key needed, cached 60 seconds.",
-    request: "No body required.",
+    params: "?threshold=500000 (optional, min USD amount, default 500000)",
+    summary: "Recent large USDC transfers on Base. On-chain data, cached 60 seconds.",
+    request: "No body required. Optional: ?threshold=500000",
     response: '{ "success": true, "data": { "large_transfers": [{ "hash": "0x...", "from": "0x...", "to": "0x...", "amount_usdc": 1250000, "age_seconds": 42 }], "threshold_usd": 500000 } }',
   },
   {
@@ -105,7 +110,8 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/coding/cache/dependency-tree",
     price: "$0.030",
-    summary: "Parse import/export dependency graph from JavaScript or TypeScript source code using @babel/parser.",
+    params: null,
+    summary: "Parse import/export dependency graph from JavaScript or TypeScript source code.",
     request: '{ "code": "import { Hono } from \'hono\';\nexport default app;", "filename": "server.ts" }',
     response: '{ "success": true, "data": { "imports": ["hono"], "exports": [], "depth": 1 } }',
   },
@@ -114,6 +120,7 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/coding/cache/token-compressor",
     price: "$0.030",
+    params: null,
     summary: "Strip comments and collapse whitespace to minimize LLM token usage. Returns compression ratio.",
     request: '{ "raw_code": "// This is a comment\\nconst x = 1;" }',
     response: '{ "success": true, "data": { "compressed": "const x = 1;", "ratio_pct": 55, "original_bytes": 34, "compressed_bytes": 13 } }',
@@ -123,6 +130,7 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/coding/cache/syntax-heartbeat",
     price: "$0.030",
+    params: null,
     summary: "Validate JavaScript/TypeScript/JSX syntax and return parse errors with position hints.",
     request: '{ "code": "const x = ;" }',
     response: '{ "success": true, "data": { "valid": false, "errors": ["UnexpectedToken (pos 10)"], "lines": 1 } }',
@@ -132,6 +140,7 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/coding/cache/refactor-suggest",
     price: "$0.050",
+    params: null,
     summary: "LLM-powered refactoring suggestions. Returns severity-rated findings and overall code quality score.",
     request: '{ "code": "function add(a,b) { return a+b }", "language": "javascript" }',
     response: '{ "success": true, "data": { "suggestions": [{ "type": "naming", "severity": "low", "description": "Add type annotations" }], "overall_quality": "fair", "summary": "..." } }',
@@ -141,6 +150,7 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/coding/cache/security-audit",
     price: "$0.060",
+    params: null,
     summary: "Static security audit via LLM. Detects SQL injection, XSS, insecure eval, and hardcoded secrets.",
     request: '{ "code": "db.query(`SELECT * FROM users WHERE id=${req.id}`)", "language": "javascript" }',
     response: '{ "success": true, "data": { "vulnerabilities": [{ "id": "SQL001", "severity": "critical", "title": "SQL Injection", "recommendation": "Use parameterized queries" }], "risk_score": 85 } }',
@@ -150,7 +160,8 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/analysis/memory/heartbeat",
     price: "$0.030",
-    summary: "Cosine similarity between two texts using BAAI/bge-base-en-v1.5 embeddings (768 dims). Runs on-device — no external API call.",
+    params: null,
+    summary: "Cosine similarity between two texts using high-dimensional sentence embeddings. Runs on-device.",
     request: '{ "text_a": "machine learning", "text_b": "artificial intelligence" }',
     response: '{ "success": true, "data": { "similarity": 0.887, "similarity_pct": 88.7, "vector_dims": 768, "interpretation": "very similar" } }',
   },
@@ -159,7 +170,8 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/analysis/memory/entity-extractor",
     price: "$0.060",
-    summary: "Extract named entities (persons, orgs, locations, dates, money) from unstructured text via LLM.",
+    params: null,
+    summary: "Extract named entities (persons, orgs, locations, dates, money) from unstructured text.",
     request: '{ "text": "Satoshi Nakamoto published the Bitcoin whitepaper in 2008." }',
     response: '{ "success": true, "data": { "entities": [{ "text": "Satoshi Nakamoto", "type": "PERSON", "confidence": "high" }, { "text": "2008", "type": "DATE", "confidence": "high" }], "entity_count": 3 } }',
   },
@@ -168,7 +180,8 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/analysis/memory/context-ranker",
     price: "$0.050",
-    summary: "Re-rank text chunks by semantic relevance to a query using BGE embeddings and cosine similarity.",
+    params: null,
+    summary: "Re-rank text chunks by semantic relevance to a query using sentence embeddings and cosine similarity.",
     request: '{ "query": "machine learning", "chunks": ["deep learning models", "spreadsheet formulas", "neural networks"] }',
     response: '{ "success": true, "data": { "ranked": [{ "index": 0, "score": 0.921, "chunk": "deep learning models" }, { "index": 2, "score": 0.889, "chunk": "neural networks" }, { "index": 1, "score": 0.102, "chunk": "spreadsheet formulas" }] } }',
   },
@@ -177,6 +190,7 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/analysis/memory/bias-detector",
     price: "$0.050",
+    params: null,
     summary: "Detect framing bias, sentiment slant, and loaded language in text. Returns score and specific examples.",
     request: '{ "text": "The radical policy will destroy the economy." }',
     response: '{ "success": true, "data": { "bias_detected": true, "bias_types": ["loaded_language", "framing"], "bias_score": 72, "confidence": "high", "examples": [{ "phrase": "radical", "type": "loaded_language" }] } }',
@@ -186,52 +200,38 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/analysis/memory/fact-linkage",
     price: "$0.120",
-    summary: "Link a claim to verified fact-check records via Google Fact Check Tools API (ClaimReview database). Falls back to LLM analysis for unverified claims.",
+    params: null,
+    summary: "Link a claim to verified fact-check records from multiple databases. Falls back to LLM analysis for unverified claims.",
     request: '{ "claim": "The moon landing was faked.", "language": "en" }',
-    response: '{ "success": true, "data": { "source": "google_factcheck", "claims": [{ "reviews": [{ "publisher": "Snopes", "rating": "False" }] }] } }',
+    response: '{ "success": true, "data": { "source": "fact_check_db", "claims": [{ "reviews": [{ "publisher": "Snopes", "rating": "False" }] }] } }',
   },
 ];
 
 const bundles = [...new Set(endpoints.map((e) => e.bundle))];
 ---
 
-<MainLayout title="Docs — Lobre" description="How to integrate Lobre with your AI agent. System prompt, MCP setup, and full API reference for all 15 endpoints.">
+<MainLayout title="Docs — Lobre" description="How to integrate Lobre with your AI agent. System prompt, MCP setup, and full API reference for all 15 pay-per-request endpoints.">
   <Header />
 
-  <main style="max-width:72rem;margin:0 auto;padding:2rem 1.5rem 5rem;">
+  <main class="docs-main">
 
     <!-- ─── Title ─────────────────────────────────────────────────────────── -->
-    <div style="margin-bottom:2.5rem;">
-      <h1 style="font-size:2rem;font-weight:700;letter-spacing:-0.03em;color:#F3F4F6;margin-bottom:0.5rem;">
-        Docs
-      </h1>
-      <p style="color:#9CA3AF;font-size:0.9375rem;margin-bottom:1rem;">
-        Everything you need to connect an AI agent to Lobre.
-      </p>
-      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-        <a href="/api/openapi.json" target="_blank" rel="noopener noreferrer"
-           style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;border:1px solid #374151;padding:0.25rem 0.75rem;">
-          /openapi.json
-        </a>
-        <a href="/llms.txt" target="_blank" rel="noopener noreferrer"
-           style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;border:1px solid #374151;padding:0.25rem 0.75rem;">
-          /llms.txt
-        </a>
-        <a href="/api/mcp" target="_blank" rel="noopener noreferrer"
-           style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;border:1px solid #374151;padding:0.25rem 0.75rem;">
-          /api/mcp
-        </a>
+    <div class="docs-title-block">
+      <h1 class="docs-h1">Docs</h1>
+      <p class="docs-subtitle">Everything you need to connect an AI agent to Lobre.</p>
+      <div class="docs-links">
+        <a href="/api/openapi.json" target="_blank" rel="noopener noreferrer" class="docs-link-chip">/openapi.json</a>
+        <a href="/llms.txt" target="_blank" rel="noopener noreferrer" class="docs-link-chip">/llms.txt</a>
+        <a href="/api/mcp" target="_blank" rel="noopener noreferrer" class="docs-link-chip">/api/mcp</a>
       </div>
     </div>
 
-    <div style="border-top:2px solid #374151;margin-bottom:3rem;"></div>
+    <div class="divider"></div>
 
     <!-- ─── What is Lobre ──────────────────────────────────────────────────── -->
-    <section style="margin-bottom:3rem;">
-      <h2 style="font-size:1.125rem;font-weight:700;color:#D4AF37;margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:2px solid #374151;">
-        What is offered through Lobre?
-      </h2>
-      <p style="color:#9CA3AF;font-size:0.9375rem;line-height:1.7;max-width:56rem;">
+    <section class="docs-section">
+      <h2 class="docs-h2">What is Lobre?</h2>
+      <p class="docs-body">
         Lobre provides 15 pay-per-request utility endpoints across three bundles: live trading data
         (market vitals, orderbook depth, MEV risk, funding rates, whale tracking), code intelligence
         (AST parsing, token compression, syntax validation, LLM-powered refactoring, security audits),
@@ -239,140 +239,139 @@ const bundles = [...new Set(endpoints.map((e) => e.bundle))];
         claim verification). All endpoints require micropayment in USDC — no sign-up, no API keys.
         Payment is the credential.
       </p>
-      <p style="color:#9CA3AF;font-size:0.9375rem;line-height:1.7;max-width:56rem;margin-top:0.75rem;">
-        Full specifications are available in <a href="/llms.txt" style="color:#D4AF37;text-decoration:none;">/llms.txt</a>
-        and <a href="/api/openapi.json" target="_blank" rel="noopener noreferrer" style="color:#D4AF37;text-decoration:none;">/api/openapi.json</a>.
+      <p class="docs-body" style="margin-top:0.75rem;">
+        Full specifications are available in
+        <a href="/llms.txt" class="docs-link-inline">/llms.txt</a> and
+        <a href="/api/openapi.json" target="_blank" rel="noopener noreferrer" class="docs-link-inline">/api/openapi.json</a>.
       </p>
     </section>
 
     <!-- ─── Getting Started ────────────────────────────────────────────────── -->
-    <section style="margin-bottom:3rem;">
-      <h2 style="font-size:1.125rem;font-weight:700;color:#D4AF37;margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:2px solid #374151;">
-        How to use with an AI agent?
-      </h2>
-
-      <p style="color:#9CA3AF;font-size:0.9375rem;margin-bottom:1.25rem;">
+    <section class="docs-section">
+      <h2 class="docs-h2">How to use with an AI agent</h2>
+      <p class="docs-body" style="margin-bottom:1.25rem;">
         Lobre works with any agent that supports AgentCash. Run these three commands once:
       </p>
 
-      <div style="background:#282D37;border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;padding:1.5rem;max-width:36rem;margin-bottom:1.5rem;">
-        <div style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center;">
-          <div style="width:0.6rem;height:0.6rem;border-radius:50%;background:#374151;"></div>
-          <div style="width:0.6rem;height:0.6rem;border-radius:50%;background:#374151;"></div>
-          <div style="width:0.6rem;height:0.6rem;border-radius:50%;background:#374151;"></div>
-          <span style="margin-left:0.5rem;font-size:0.75rem;color:#9CA3AF;font-family:'JetBrains Mono',monospace;">terminal</span>
+      <div class="terminal-block">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          </div>
+          <span class="terminal-label">terminal</span>
         </div>
         {onboardingSteps.map((step, i) => (
-          <div style={i < onboardingSteps.length - 1 ? "margin-bottom:0.75rem;" : ""}>
-            <span style="color:#9CA3AF;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;">
-              step {i + 1} — {step.label}
-            </span>
+          <div class={i < onboardingSteps.length - 1 ? "terminal-line" : "terminal-line-last"}>
+            <span class="terminal-meta">step {i + 1} — {step.label}</span>
             <br />
-            <span style="color:#D4AF37;font-family:'JetBrains Mono',monospace;font-size:0.875rem;">
-              $ {step.command}
-            </span>
+            <span class="terminal-cmd">$ {step.command}</span>
           </div>
         ))}
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:0.5rem;max-width:48rem;">
-        <p style="color:#9CA3AF;font-size:0.875rem;line-height:1.6;">
-          <strong style="color:#F3F4F6;">Wallet:</strong>
-          After running <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.75rem;">agentcash onboard</code>,
-          a wallet is generated at <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.75rem;">~/.agentcash/wallet.json</code>.
+      <div class="docs-info-grid">
+        <p class="docs-sm">
+          <strong class="docs-strong">Wallet:</strong>
+          After running <code class="inline-code">agentcash onboard</code>,
+          a wallet is generated at <code class="inline-code">~/.agentcash/wallet.json</code>.
           Deposit USDC (Base mainnet) before the first call.
         </p>
-        <p style="color:#9CA3AF;font-size:0.875rem;line-height:1.6;">
-          <strong style="color:#F3F4F6;">Balance:</strong>
-          Use <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.75rem;">mcp__agentcash__get_balance</code> to check your wallet balance and address.
+        <p class="docs-sm">
+          <strong class="docs-strong">Balance:</strong>
+          Use <code class="inline-code">mcp__agentcash__get_balance</code> to check your wallet balance and address.
         </p>
       </div>
     </section>
 
     <!-- ─── System Prompt ──────────────────────────────────────────────────── -->
-    <section style="margin-bottom:3rem;">
-      <h2 style="font-size:1.125rem;font-weight:700;color:#D4AF37;margin-bottom:0.5rem;padding-bottom:0.5rem;border-bottom:2px solid #374151;">
-        System prompt for your AI agent
-      </h2>
-      <p style="color:#9CA3AF;font-size:0.875rem;margin-bottom:1rem;">
+    <section class="docs-section">
+      <h2 class="docs-h2">System prompt for your AI agent</h2>
+      <p class="docs-sm" style="margin-bottom:1rem;">
         Paste this into your agent's system prompt or Claude project instructions to give it full access to Lobre.
       </p>
-      <div style="border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;">
-        <div style="background:#282D37;padding:0.5rem 1rem;border-bottom:1px solid #374151;display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;">system prompt</span>
-          <button onclick="copyBlock('system-prompt-pre')" style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:#9CA3AF;background:none;border:1px solid #374151;padding:0.2rem 0.6rem;cursor:pointer;" id="copy-sysprompt">copy</button>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-label">system prompt</span>
+          <button class="copy-btn" data-target="system-prompt-pre">copy</button>
         </div>
-        <pre id="system-prompt-pre" style="background:#1E2229;padding:1.25rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre;line-height:1.55;">{systemPrompt}</pre>
+        <pre id="system-prompt-pre" class="code-pre">{systemPrompt}</pre>
       </div>
     </section>
 
     <!-- ─── MCP Integration ────────────────────────────────────────────────── -->
-    <section style="margin-bottom:3rem;">
-      <h2 style="font-size:1.125rem;font-weight:700;color:#D4AF37;margin-bottom:0.5rem;padding-bottom:0.5rem;border-bottom:2px solid #374151;">
-        MCP integration
-      </h2>
-      <p style="color:#9CA3AF;font-size:0.875rem;margin-bottom:1rem;">
-        Lobre exposes all 15 endpoints as MCP tools via Streamable HTTP Transport. Compatible with Claude Desktop, Claude Code, and any MCP-capable agent.
+    <section class="docs-section">
+      <h2 class="docs-h2">MCP integration</h2>
+      <p class="docs-sm" style="margin-bottom:1rem;">
+        Lobre exposes all 15 endpoints as MCP tools via Streamable HTTP Transport.
+        Compatible with Claude Desktop, Claude Code, and any MCP-capable agent.
+        <strong class="docs-strong"> Requires x402/MPP payment ($0.030 per request)</strong> — only x402-capable clients supported.
       </p>
-      <p style="color:#9CA3AF;font-size:0.875rem;margin-bottom:1rem;">
-        Add to <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.75rem;">~/.claude/claude_desktop_config.json</code> (Claude Desktop) or use <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.75rem;">claude mcp add</code> (Claude Code):
+      <p class="docs-sm" style="margin-bottom:1rem;">
+        Add to <code class="inline-code">~/.claude/claude_desktop_config.json</code> (Claude Desktop) or use <code class="inline-code">claude mcp add</code> (Claude Code):
       </p>
-      <div style="border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;margin-bottom:1rem;">
-        <div style="background:#282D37;padding:0.5rem 1rem;border-bottom:1px solid #374151;display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;">claude_desktop_config.json</span>
-          <button onclick="copyBlock('mcp-config-pre')" style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:#9CA3AF;background:none;border:1px solid #374151;padding:0.2rem 0.6rem;cursor:pointer;" id="copy-mcp">copy</button>
+      <div class="code-block-wrapper" style="margin-bottom:1rem;">
+        <div class="code-block-header">
+          <span class="code-block-label">claude_desktop_config.json</span>
+          <button class="copy-btn" data-target="mcp-config-pre">copy</button>
         </div>
-        <pre id="mcp-config-pre" style="background:#1E2229;padding:1.25rem;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre;">{mcpConfig}</pre>
+        <pre id="mcp-config-pre" class="code-pre">{mcpConfig}</pre>
       </div>
-      <p style="color:#9CA3AF;font-size:0.8125rem;">
-        MCP endpoint: <a href="/api/mcp" target="_blank" rel="noopener noreferrer" style="color:#D4AF37;font-family:'JetBrains Mono',monospace;text-decoration:none;">https://lobre.lat/api/mcp</a>
-        — 15 tools, mirroring every REST endpoint. Payment via AgentCash MCP tools.
+      <p class="docs-sm">
+        MCP endpoint: <a href="/api/mcp" target="_blank" rel="noopener noreferrer" class="docs-link-mono">https://lobre.lat/api/mcp</a>
+        — 15 tools, mirroring every REST endpoint.
       </p>
     </section>
 
-    <div style="border-top:2px solid #374151;margin-bottom:3rem;"></div>
+    <div class="divider"></div>
 
     <!-- ─── API Reference ──────────────────────────────────────────────────── -->
     <section>
-      <h2 style="font-size:1.5rem;font-weight:700;letter-spacing:-0.02em;color:#F3F4F6;margin-bottom:0.5rem;">
-        API Reference
-      </h2>
-      <p style="color:#9CA3AF;font-size:0.9375rem;margin-bottom:2rem;">
+      <h2 class="docs-h2-lg">API Reference</h2>
+      <p class="docs-body" style="margin-bottom:2rem;">
         All endpoints require payment via x402 or MPP. On first request without payment, the server returns
-        <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.8125rem;">402 Payment Required</code>
-        with the challenge in the <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.8125rem;">payment-required</code> header.
-        AgentCash clients handle this automatically.
+        <code class="inline-code">402 Payment Required</code> with the challenge in the
+        <code class="inline-code">payment-required</code> header. AgentCash clients handle this automatically.
       </p>
 
       {bundles.map((bundle) => (
-        <div style="margin-bottom:3rem;">
-          <h3 style="font-size:1rem;font-weight:700;color:#D4AF37;margin-bottom:1.25rem;padding-bottom:0.375rem;border-bottom:1px solid #374151;">
-            {bundle}
-          </h3>
-
-          <div style="display:flex;flex-direction:column;gap:1rem;">
-            {endpoints.filter((e) => e.bundle === bundle).map((ep) => (
-              <div style="border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;">
-                <div style="background:#282D37;padding:0.75rem 1.25rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;border-bottom:1px solid #374151;">
-                  <span style={`font-family:'JetBrains Mono',monospace;font-size:0.7rem;font-weight:700;padding:0.15rem 0.5rem;border:1px solid #374151;color:${ep.method === "GET" ? "#D4AF37" : "#9CA3AF"};`}>
+        <div class="bundle-section">
+          <h3 class="bundle-title">{bundle}</h3>
+          <div class="endpoint-list">
+            {endpoints.filter((e) => e.bundle === bundle).map((ep, epIdx) => (
+              <div class="endpoint-card">
+                <div class="endpoint-header">
+                  <span class={`method-badge ${ep.method === "GET" ? "method-get" : "method-post"}`}>
                     {ep.method}
                   </span>
-                  <code style="font-family:'JetBrains Mono',monospace;font-size:0.875rem;color:#F3F4F6;">
-                    {ep.path}
-                  </code>
-                  <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;color:#9CA3AF;">
-                    {ep.price}
-                  </span>
+                  <code class="endpoint-path">{ep.path}</code>
+                  <span class="endpoint-price">{ep.price}</span>
                 </div>
-                <div style="padding:1rem 1.25rem;display:flex;flex-direction:column;gap:0.875rem;">
-                  <p style="font-size:0.9rem;color:#9CA3AF;line-height:1.6;margin:0;">{ep.summary}</p>
-                  <div>
-                    <p style="font-size:0.7rem;color:#374151;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Request</p>
-                    <pre style="background:#1E2229;border:1px solid #374151;padding:0.625rem;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre-wrap;">{ep.request}</pre>
-                  </div>
-                  <div>
-                    <p style="font-size:0.7rem;color:#374151;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Response</p>
-                    <pre style="background:#1E2229;border:1px solid #374151;padding:0.625rem;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre-wrap;">{ep.response}</pre>
+                <div class="endpoint-body">
+                  <p class="endpoint-summary">{ep.summary}</p>
+                  {ep.params && (
+                    <p class="endpoint-params"><span class="label-chip">params</span> {ep.params}</p>
+                  )}
+                  <div class="code-group">
+                    <div class="code-row">
+                      <p class="code-label">Request</p>
+                      <div class="code-block-wrapper">
+                        <div class="code-block-header">
+                          <span class="code-block-label">{ep.method} {ep.path}</span>
+                          <button class="copy-btn" data-target={`req-${epIdx}`}>copy</button>
+                        </div>
+                        <pre id={`req-${epIdx}`} class="code-pre-sm">{ep.request}</pre>
+                      </div>
+                    </div>
+                    <div class="code-row">
+                      <p class="code-label">Response</p>
+                      <div class="code-block-wrapper">
+                        <div class="code-block-header">
+                          <span class="code-block-label">200 OK</span>
+                          <button class="copy-btn" data-target={`res-${epIdx}`}>copy</button>
+                        </div>
+                        <pre id={`res-${epIdx}`} class="code-pre-sm">{ep.response}</pre>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -384,13 +383,13 @@ const bundles = [...new Set(endpoints.map((e) => e.bundle))];
 
   </main>
 
-  <footer style="border-top:2px solid #374151;padding:2rem 1.5rem;">
-    <div style="max-width:72rem;margin:0 auto;display:flex;flex-direction:column;gap:0.75rem;">
-      <p style="font-size:0.875rem;color:#9CA3AF;">
+  <footer class="docs-footer">
+    <div class="docs-footer-inner">
+      <p class="footer-text">
         Built on open standards for agentic payments from Coinbase and Tempo.
         Payments settle in USDC on Base or Tempo.
       </p>
-      <nav style="display:flex;gap:1.25rem;flex-wrap:wrap;">
+      <nav class="footer-nav">
         {[
           ["/llms.txt", "/llms.txt", true],
           ["/", "Home", false],
@@ -401,7 +400,7 @@ const bundles = [...new Set(endpoints.map((e) => e.bundle))];
             href={String(href)}
             target={external ? "_blank" : undefined}
             rel={external ? "noopener noreferrer" : undefined}
-            style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;"
+            class="footer-link"
           >
             {String(label)}
           </a>
@@ -409,16 +408,284 @@ const bundles = [...new Set(endpoints.map((e) => e.bundle))];
       </nav>
     </div>
   </footer>
-
-
-<script>
-function copyBlock(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  navigator.clipboard.writeText(el.innerText).then(() => {
-    const btn = el.previousElementSibling?.querySelector('button') || el.parentElement?.querySelector('button');
-    if (btn) { const orig = btn.textContent; btn.textContent = 'copied!'; btn.style.color = '#D4AF37'; setTimeout(() => { btn.textContent = orig; btn.style.color = '#9CA3AF'; }, 1500); }
-  });
-}
-</script>
 </MainLayout>
+
+<style>
+  /* ── Layout ─────────────────────────────────────────────────────────────── */
+  .docs-main {
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 5rem;
+  }
+  @media (max-width: 640px) {
+    .docs-main { padding: 1.5rem 1rem 4rem; }
+  }
+
+  /* ── Title block ─────────────────────────────────────────────────────────── */
+  .docs-title-block { margin-bottom: 2.5rem; }
+  .docs-h1 {
+    font-size: clamp(1.75rem, 5vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: #F3F4F6;
+    margin-bottom: 0.5rem;
+  }
+  .docs-subtitle { color: #9CA3AF; font-size: 0.9375rem; margin-bottom: 1rem; }
+  .docs-links { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .docs-link-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    text-decoration: none;
+    border: 1px solid #374151;
+    padding: 0.25rem 0.75rem;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .docs-link-chip:hover { border-color: #D4AF37; color: #D4AF37; }
+
+  /* ── Divider ─────────────────────────────────────────────────────────────── */
+  .divider { border-top: 2px solid #374151; margin-bottom: 3rem; }
+
+  /* ── Sections ────────────────────────────────────────────────────────────── */
+  .docs-section { margin-bottom: 3rem; }
+  .docs-h2 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #D4AF37;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #374151;
+  }
+  .docs-h2-lg {
+    font-size: clamp(1.25rem, 4vw, 1.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #F3F4F6;
+    margin-bottom: 0.5rem;
+  }
+  .docs-body { color: #9CA3AF; font-size: 0.9375rem; line-height: 1.7; max-width: 56rem; }
+  .docs-sm { color: #9CA3AF; font-size: 0.875rem; line-height: 1.6; }
+  .docs-strong { color: #F3F4F6; }
+  .docs-link-inline { color: #D4AF37; text-decoration: none; }
+  .docs-link-inline:hover { text-decoration: underline; }
+  .docs-link-mono {
+    color: #D4AF37;
+    font-family: 'JetBrains Mono', monospace;
+    text-decoration: none;
+  }
+  .docs-link-mono:hover { text-decoration: underline; }
+  .docs-info-grid { display: flex; flex-direction: column; gap: 0.5rem; max-width: 48rem; }
+
+  /* ── Terminal ────────────────────────────────────────────────────────────── */
+  .terminal-block {
+    background: #282D37;
+    border: 2px solid #374151;
+    box-shadow: 4px 4px 0 0 #374151;
+    padding: 1.5rem;
+    max-width: 36rem;
+    margin-bottom: 1.5rem;
+  }
+  .terminal-header { display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center; }
+  .terminal-dots { display: flex; gap: 0.5rem; }
+  .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: #374151; }
+  .terminal-label {
+    margin-left: 0.5rem;
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .terminal-line { margin-bottom: 0.75rem; }
+  .terminal-line-last {}
+  .terminal-meta { color: #9CA3AF; font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem; }
+  .terminal-cmd { color: #D4AF37; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; }
+
+  /* ── Inline code ─────────────────────────────────────────────────────────── */
+  .inline-code {
+    font-family: 'JetBrains Mono', monospace;
+    background: #282D37;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.75rem;
+    color: #D4AF37;
+  }
+
+  /* ── Code blocks ─────────────────────────────────────────────────────────── */
+  .code-block-wrapper { border: 2px solid #374151; box-shadow: 4px 4px 0 0 #374151; }
+  .code-block-header {
+    background: #282D37;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid #374151;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .code-block-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: #9CA3AF;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .copy-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: #9CA3AF;
+    background: none;
+    border: 1px solid #374151;
+    padding: 0.2rem 0.6rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .copy-btn:hover { color: #D4AF37; border-color: #D4AF37; }
+  .code-pre {
+    background: #1E2229;
+    padding: 1.25rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    overflow-x: auto;
+    margin: 0;
+    white-space: pre;
+    line-height: 1.55;
+  }
+  .code-pre-sm {
+    background: #1E2229;
+    padding: 0.625rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: #9CA3AF;
+    overflow-x: auto;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+  }
+
+  /* ── Endpoint cards ──────────────────────────────────────────────────────── */
+  .bundle-section { margin-bottom: 3rem; }
+  .bundle-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #D4AF37;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.375rem;
+    border-bottom: 1px solid #374151;
+  }
+  .endpoint-list { display: flex; flex-direction: column; gap: 1rem; }
+  .endpoint-card { border: 2px solid #374151; box-shadow: 4px 4px 0 0 #374151; }
+  .endpoint-header {
+    background: #282D37;
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    border-bottom: 1px solid #374151;
+  }
+  .method-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid #374151;
+    flex-shrink: 0;
+  }
+  .method-get { color: #D4AF37; }
+  .method-post { color: #9CA3AF; }
+  .endpoint-path {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8125rem;
+    color: #F3F4F6;
+    word-break: break-all;
+  }
+  @media (max-width: 640px) {
+    .endpoint-path { font-size: 0.7rem; }
+  }
+  .endpoint-price {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8125rem;
+    color: #9CA3AF;
+    flex-shrink: 0;
+  }
+  .endpoint-body { padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.875rem; }
+  .endpoint-summary { font-size: 0.9rem; color: #9CA3AF; line-height: 1.6; margin: 0; }
+  .endpoint-params { font-size: 0.8rem; color: #9CA3AF; margin: 0; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+  .label-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 1px solid #374151;
+    padding: 0.1rem 0.35rem;
+    flex-shrink: 0;
+  }
+  .code-group { display: flex; flex-direction: column; gap: 0.75rem; }
+  .code-row {}
+  .code-label {
+    font-size: 0.7rem;
+    color: #374151;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.25rem;
+  }
+
+  /* ── Footer ──────────────────────────────────────────────────────────────── */
+  .docs-footer { border-top: 2px solid #374151; padding: 2rem 1.5rem; }
+  @media (max-width: 640px) { .docs-footer { padding: 2rem 1rem; } }
+  .docs-footer-inner {
+    max-width: 72rem;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .footer-text { font-size: 0.875rem; color: #9CA3AF; }
+  .footer-nav { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+  .footer-link {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    text-decoration: none;
+  }
+  .footer-link:hover { color: #D4AF37; }
+</style>
+
+<script is:inline>
+(function () {
+  function copyBlock(targetId) {
+    var el = document.getElementById(targetId);
+    if (!el) return;
+    var text = el.innerText || el.textContent || '';
+    navigator.clipboard.writeText(text).then(function () {
+      var btn = document.querySelector('[data-target="' + targetId + '"]');
+      if (btn) {
+        btn.textContent = 'copied!';
+        btn.style.color = '#D4AF37';
+        btn.style.borderColor = '#D4AF37';
+        setTimeout(function () {
+          btn.textContent = 'copy';
+          btn.style.color = '#9CA3AF';
+          btn.style.borderColor = '#374151';
+        }, 1500);
+      }
+    }).catch(function () {
+      var btn = document.querySelector('[data-target="' + targetId + '"]');
+      if (btn) { btn.textContent = 'failed'; setTimeout(function () { btn.textContent = 'copy'; }, 1500); }
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.copy-btn');
+    if (!btn) return;
+    var target = btn.getAttribute('data-target');
+    if (target) copyBlock(target);
+  });
+})();
+</script>

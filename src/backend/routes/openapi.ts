@@ -61,7 +61,7 @@ openapi.get("/openapi.json", (c) => {
               data: {
                 type: "object",
                 properties: {
-                  source: { type: "string", example: "binance" },
+                  source: { type: "string" },
                   engine_status: { type: "string" },
                   btc: {
                     type: "object",
@@ -157,7 +157,7 @@ openapi.get("/openapi.json", (c) => {
       "/v1/trading/engine/funding-rates": {
         get: {
           operationId: "tradingFundingRates",
-          summary: "Perpetual futures funding rates from Binance — BTC, ETH, SOL",
+          summary: "Perpetual futures funding rates — BTC, ETH, SOL",
           tags: ["Trading"],
           parameters: [{ in: "query", name: "symbols", required: false, schema: { type: "string", default: "" }, description: "Comma-separated filter: BTC,ETH,SOL. Omit for all three." }],
           ...pay("trading.fundingRates", payTo, network),
@@ -388,7 +388,7 @@ openapi.get("/openapi.json", (c) => {
       "/v1/analysis/memory/heartbeat": {
         post: {
           operationId: "analysisHeartbeat",
-          summary: "Cosine similarity between two texts using BGE-base-en-v1.5 embeddings",
+          summary: "Cosine similarity between two texts using sentence embeddings",
           tags: ["Analysis"],
           requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["text_a", "text_b"], properties: { text_a: { type: "string" }, text_b: { type: "string" } } } } } },
           ...pay("analysis.heartbeat", payTo, network),
@@ -515,7 +515,7 @@ openapi.get("/openapi.json", (c) => {
       "/v1/analysis/memory/fact-linkage": {
         post: {
           operationId: "analysisFactLinkage",
-          summary: "Verify claims via Google Fact Check API (ClaimReview) + LLM fallback",
+          summary: "Verify claims via fact-check databases + LLM fallback",
           tags: ["Analysis"],
           requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["claim"], properties: { claim: { type: "string" }, language: { type: "string", default: "en" } } } } } },
           ...pay("analysis.factLinkage", payTo, network),

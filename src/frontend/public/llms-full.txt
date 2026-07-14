@@ -40,7 +40,7 @@
 # GET /api/v1/trading/engine/vitals
 URL: https://lobre.lat/api/v1/trading/engine/vitals
 
-Live BTC and ETH market vitals from Binance. Falls back to CoinGecko on upstream failure. Cached 10 seconds.
+Live BTC and ETH market vitals aggregated from major CEX feeds. Cached 10 seconds.
 
 Price: $0.030 USDC
 Method: GET
@@ -52,7 +52,7 @@ Response: { "success": true, "bundle": "trading_engine", "data": { "source": "bi
 # GET /api/v1/trading/engine/orderbook-depth
 URL: https://lobre.lat/api/v1/trading/engine/orderbook-depth
 
-Binance orderbook bids/asks for a trading pair. Returns spread (USD and %), top-10 depth on each side, and book imbalance (-1 to 1). Cached 5 seconds.
+CEX orderbook bids/asks for a trading pair. Returns spread (USD and %), top-10 depth on each side, and book imbalance (-1 to 1). Cached 5 seconds.
 
 Price: $0.005 USDC
 Method: GET
@@ -88,7 +88,7 @@ Response: { "success": true, "bundle": "trading_engine", "data": { "source": "bi
 # GET /api/v1/trading/engine/whale-tracker
 URL: https://lobre.lat/api/v1/trading/engine/whale-tracker
 
-Recent USDC transfers on Base mainnet above $500,000. Source: Blockscout open-source block explorer (no API key required). Returns up to 25 most recent large transfers. Cached 60 seconds.
+Recent large USDC transfers on Base mainnet above the configured threshold. On-chain data. Returns up to 25 most recent transfers. Cached 60 seconds.
 
 Price: $0.080 USDC
 Method: GET
@@ -100,7 +100,7 @@ Response: { "success": true, "bundle": "trading_engine", "data": { "source": "bl
 # POST /api/v1/coding/cache/dependency-tree
 URL: https://lobre.lat/api/v1/coding/cache/dependency-tree
 
-Parse static import and export dependency graph from JavaScript or TypeScript source code using @babel/parser. Supports TypeScript, JSX, and ES modules. Returns list of imported modules, exported modules, and import depth.
+Parse static import and export dependency graph from JavaScript or TypeScript source code. Supports TypeScript, JSX, and ES modules. Returns list of imported modules, exported modules, and import depth.
 
 Price: $0.003 USDC
 Method: POST
@@ -136,7 +136,7 @@ Response: { "success": true, "bundle": "coding_cache", "data": { "valid": boolea
 # POST /api/v1/coding/cache/refactor-suggest
 URL: https://lobre.lat/api/v1/coding/cache/refactor-suggest
 
-LLM-powered code review providing refactoring suggestions with severity ratings and overall quality score. Powered by Ollama (qwen2.5:3b, on-device) with Groq cloud fallback.
+LLM-powered code review providing refactoring suggestions with severity ratings and overall quality score.
 
 Price: $0.005 USDC
 Method: POST
@@ -160,7 +160,7 @@ Response: { "success": true, "bundle": "coding_cache", "data": { "vulnerabilitie
 # POST /api/v1/analysis/memory/heartbeat
 URL: https://lobre.lat/api/v1/analysis/memory/heartbeat
 
-Compute cosine similarity between two texts using BAAI/bge-base-en-v1.5 embeddings (768 dimensions). Runs on-device via @xenova/transformers — no external API call. Includes human-readable interpretation.
+Compute cosine similarity between two texts using 768-dimensional sentence embeddings. Runs on-device — no external API call. Includes human-readable interpretation.
 
 Price: $0.003 USDC
 Method: POST
@@ -208,7 +208,7 @@ Response: { "success": true, "bundle": "live_vector_pruner", "data": { "bias_det
 # POST /api/v1/analysis/memory/fact-linkage
 URL: https://lobre.lat/api/v1/analysis/memory/fact-linkage
 
-Verify a claim against the Google Fact Check Tools API (ClaimReview global database). Falls back to LLM analysis for claims not yet fact-checked by humans. Most expensive endpoint due to external API + LLM combination.
+Verify a claim against multiple fact-check databases. Falls back to LLM analysis for claims not yet fact-checked by humans.
 
 Price: $0.012 USDC
 Method: POST
