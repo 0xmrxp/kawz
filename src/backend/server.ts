@@ -45,7 +45,14 @@ const port = parseInt(env.PORT);
 
 console.log(`[lobre] listening on http://localhost:${port} (${env.ENVIRONMENT})`);
 
-// Explicit Bun.serve() required when running under PM2 fork mode.
-// The 'export default { port, fetch }' pattern only activates Bun's HTTP server
-// when Bun is the direct entry-point runner — it does not work via PM2.
-Bun.serve({ port, fetch: app.fetch });
+// Rewrite http:// → https:// when Caddy signals the public request was HTTPS.
+// Required so @x402/hono builds the correct resource URL in the payment challenge
+// (Caddy terminates TLS and forwards internally via HTTP, so req.url is http://).
+function proxyFetch(req: Request): Response | Promise<Response> {
+  if (req.headers.get("x-forwarded-proto") === "https" && req.url.startsWith("http://")) {
+    req = new Request(req.url.replace(/^http:\/\//, "https://"), req);
+  }
+  return app.fetch(req);
+}
+
+Bun.serve({ port, fetch: proxyFetch });
