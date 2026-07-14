@@ -1144,4 +1144,58 @@ Payments settle in USDC on Base, Solana, or Tempo.
 
 ---
 
+## 18. Known Issues — Perlu Di-fix
+
+Bagian ini mencatat bug yang sudah diidentifikasi root cause-nya tetapi belum diperbaiki, beserta konteks teknis yang cukup untuk siapa pun yang akan menanganinya nanti.
+
+---
+
+### KI-001 — Bazaar Extension: Body vs Header Discrepancy
+
+**Status:** Open  
+**Severity:** Low — tidak mempengaruhi fungsionalitas payment atau scanner compatibility  
+**File terdampak:** `src/backend/server.ts` (402 interceptor)
+
+**Gejala:**
+
+Dari satu HTTP request yang sama ke endpoint mana pun (misal `GET /api/v1/trading/engine/vitals`), dua sumber data yang berbeda menunjukkan isi yang tidak konsisten:
+
+| Lokasi | `extensions.bazaar` keys |
+|--------|--------------------------|
+| Header `payment-required` (base64 decoded) | `category, discoverable, info, schema, tags` ✓ |
+| Response body JSON | `info, schema` saja ✗ |
+
+**Root cause:**
+
+Bun HTTP/2 + Hono sudah mulai "commit" response body dari x402 middleware (`@x402/hono`) sebelum interceptor kita di `server.ts` selesai mengganti `c.res`. Akibatnya:
+
+- **Header `payment-required`** → masih bisa dimodifikasi setelah response committed (HTTP/2 mendukung modifikasi header via CONTINUATION frames) → merge bazaar berjalan benar, category/tags/discoverable muncul ✓
+- **Response body** → sudah di-flush dari x402 middleware (body hanya berisi `info+schema` dari bazaar versi x402 partial), penggantian via `c.res = new Response(JSON.stringify(decoded), ...)` tidak efektif untuk body ✗
+
+```
+Flow actual (Bun HTTP/2):
+
+1. Interceptor: await next()
+2. x402 middleware: sets c.res = Response({body: partial_bazaar}, headers: {payment-required: full_bazaar})
+3. Bun HTTP/2: [BODY FLUSHED] ← body partial_bazaar sudah dikirim ke client
+4. Interceptor post-next: modifies decoded (full merge), sets payment-required header → OK
+5. Interceptor: c.res = new Response(JSON.stringify(decoded)) ← body replacement TIDAK efektif
+6. Bun HTTP/2: [HEADER SENT] ← header payment-required dengan full bazaar terkirim
+```
+
+**Kenapa tidak blocking:**
+
+Semua scanner (mppscan, x402scan) dan CDP Bazaar crawler membaca dari `payment-required` **header**, bukan dari response body. Body adalah supplementary. Header sudah benar dengan `category, discoverable, info, schema, tags`. Scanner compatibility tidak terdampak.
+
+**Pendekatan fix yang perlu diinvestigasi:**
+
+1. **Intercept sebelum Bun flush** — gunakan `return new Response(...)` dari middleware (bukan `c.res = ...`) sebelum body sempat di-flush. Perlu cek apakah Hono middleware chain mendukung `return Response` post-`await next()` di Bun runtime.
+2. **Gunakan HTTP/1.1** untuk endpoint `/api/*` di Caddy — HTTP/1.1 tidak punya masalah early-flush yang sama. Tambahkan `transport http/1.1` di Caddyfile untuk route `/api/*`. Tradeoff: kehilangan HTTP/2 multiplexing.
+3. **Pindahkan bazaar merge ke x402 middleware** di `middleware/x402.ts` sebelum body committed — inject `category/tags/discoverable` langsung ke route config sehingga `@x402/hono` sudah include semua field dari awal, tanpa perlu post-processing interceptor.
+4. **Investigasi Hono `onAfterResponse` hook** (jika ada di versi terbaru) sebagai alternatif `c.res` assignment yang lebih reliable di HTTP/2 context.
+
+**Opsi paling bersih (rekomendasi):** Opsi 3 — eliminasi kebutuhan post-processing interceptor untuk bazaar sama sekali dengan memastikan x402 middleware sudah punya data lengkap sebelum response dimulai.
+
+---
+
 *Dokumen ini adalah living document — update setiap kali ada perubahan kebijakan facilitator, alamat kontrak, atau skema discovery dari pihak Coinbase/Tempo/AgentCash.*
