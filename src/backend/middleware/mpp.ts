@@ -1,15 +1,16 @@
 // Unified payment middleware — mppx handles both EVM x402 (Base USDC) and Tempo.
 //
-// EVM path:   mppx evm.charge() emits x402 v2 payment-required challenge.
-//             Clients pay with Base mainnet USDC via EIP-3009 transferWithAuthorization.
-//             Settlement: CDP facilitator (prod) or x402.org (dev/testnet).
+// Uses mppx/server Mppx.create() directly (not mppx/hono) because the Hono
+// wrapper strips compose(). We call compose() per-request, then wrap with the
+// payment() adapter from mppx/hono to get a Hono MiddlewareHandler.
 //
-// Tempo path: mppx tempo.charge() emits MPP WWW-Authenticate challenge.
-//             Clients pay with Tempo pathUSD (chainId 4217).
-//
-// mppx.compose() accepts payment from either method — client picks whichever it supports.
+// EVM path:   evm.charge() + x402 facilitator → Base USDC, eip155:8453
+// Tempo path: tempo.charge() → Tempo pathUSD, chainId 4217
+// Client pays with whichever method it supports.
 
-import { evm, Mppx, tempo } from "mppx/hono";
+import { Mppx } from "mppx/server";
+import { evm, tempo } from "mppx/server";
+import { payment } from "mppx/hono";
 import { createCorrelationHeader } from "@coinbase/x402";
 import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import type { MiddlewareHandler } from "hono";
@@ -20,8 +21,7 @@ const CDP_HOST = "api.cdp.coinbase.com";
 const CDP_PATH = "/platform/v2/x402";
 const CDP_URL  = `https://${CDP_HOST}${CDP_PATH}`;
 
-// Wraps globalThis.fetch to inject CDP JWT auth on every call to the facilitator.
-// mppx calls /verify and /settle with plain fetch — this adds the required Authorization header.
+// Wraps globalThis.fetch with CDP JWT auth for every call to /verify or /settle.
 function createCdpFetch(apiKeyId: string, apiKeySecret: string) {
   return async (url: string, init: RequestInit = {}): Promise<Response> => {
     const op = url.endsWith("/verify") ? "verify" : "settle";
@@ -36,9 +36,9 @@ function createCdpFetch(apiKeyId: string, apiKeySecret: string) {
       ...init,
       headers: {
         ...(init.headers as Record<string, string> ?? {}),
-        Authorization:         `Bearer ${jwt}`,
-        "Correlation-Context": createCorrelationHeader(),
-        "Content-Type":        "application/json",
+        "Authorization":        `Bearer ${jwt}`,
+        "Correlation-Context":  createCorrelationHeader(),
+        "Content-Type":         "application/json",
       },
     });
   };
@@ -58,7 +58,7 @@ export function createMppMiddleware(env: Env): MiddlewareHandler {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const evmMethod = (evm as any).charge({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    currency:  (evm as any).assets.base.USDC,   // 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913, eip155:8453
+    currency:  (evm as any).assets.base.USDC,   // 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
     recipient: env.EVM_PAYEE_ADDRESS,
     x402: {
       facilitator: isProd ? CDP_URL : "https://x402.org/facilitator",
@@ -67,29 +67,40 @@ export function createMppMiddleware(env: Env): MiddlewareHandler {
   });
 
   // ── Tempo method (pathUSD, chainId 4217) ──────────────────────────────────
-  // MPP_TEMPO_USDC_ADDRESS = 0x20c0000000000000000000000000000000000000 (pathUSD on Tempo mainnet)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tempoMethod = (tempo as any)({
     currency:  env.MPP_TEMPO_USDC_ADDRESS,
     recipient: env.EVM_PAYEE_ADDRESS,
   });
 
-  const mppx = Mppx.create({
+  // Use mppx/server Mppx (has compose()). Hono wrapper strips compose.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const coreMppx = (Mppx as any).create({
     methods: [evmMethod, tempoMethod],
     realm:     new URL(env.BASE_URL).host,
     secretKey: env.MPP_SECRET_KEY,
   });
 
-  // Per-request wrapper: look up decimal USD amount for the path, then gate.
-  // Tempo and EVM amounts are both decimal strings (e.g. "0.030000") — not atomic units.
+  // Per-request: compose both methods for this amount, wrap with Hono payment adapter.
+  // compose([fn, opts], [fn, opts]) returns a single handler that accepts either method.
   return async (c, next) => {
-    const rawPath   = c.req.path;
+    const rawPath    = c.req.path;
     const lookupPath = rawPath.startsWith("/v1/") ? `/api${rawPath}` : rawPath;
-    const pricing   = ROUTE_PRICE_MAP[lookupPath];
+    const pricing    = ROUTE_PRICE_MAP[lookupPath];
     if (!pricing) return next();
 
+    const opts = { amount: pricing.usdAmount };
+
+    // compose() accepts payment from either EVM or Tempo — client picks what it can pay.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handler = (mppx as any).charge({ amount: pricing.usdAmount }) as MiddlewareHandler;
+    const composed = coreMppx.compose(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      [coreMppx["evm/charge"],   opts],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      [coreMppx["tempo/charge"], opts],
+    );
+
+    const handler = payment(composed, {}) as MiddlewareHandler;
     return handler(c, next);
   };
 }
