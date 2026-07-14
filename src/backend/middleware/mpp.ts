@@ -19,10 +19,12 @@ export function createMppMiddleware(env: Env): MiddlewareHandler {
 
   // Mppx.create() returns a wrapped instance where every intent method
   // (charge, session) returns a Hono MiddlewareHandler ready for app.use().
+  // Tempo uses pathUSD (0x20c000...) as its native stablecoin, not Base USDC.
+  // MPP_TEMPO_USDC_ADDRESS should be set to the Tempo pathUSD address in production.
   const mppx = Mppx.create({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     methods: [(tempo as any)({
-      currency:  env.MPP_TEMPO_USDC_ADDRESS, // USDC contract on Base
+      currency:  env.MPP_TEMPO_USDC_ADDRESS,
       recipient: env.EVM_PAYEE_ADDRESS,
     })],
     realm:     new URL(env.BASE_URL).host,  // "lobre.lat" — hostname only, no scheme
@@ -40,7 +42,9 @@ export function createMppMiddleware(env: Env): MiddlewareHandler {
 
     // mppx.charge() returns a MiddlewareHandler — call it directly
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chargeHandler = (mppx as any).charge({ amount: pricing.atomicUsdc }) as MiddlewareHandler;
+    // Tempo charge amount is a decimal USD string (e.g. "0.03"), not atomic units.
+    // Using atomicUsdc ("30000") was causing Tempo to interpret it as $30,000.
+    const chargeHandler = (mppx as any).charge({ amount: pricing.usdAmount }) as MiddlewareHandler;
     return chargeHandler(c, next);
   };
 }
