@@ -1,24 +1,15 @@
-// x402 payment middleware — seller-side via @x402/hono.
-// Uses paymentMiddlewareFromConfig which creates x402ResourceServer internally.
+// x402 payment middleware — seller-side via @x402/hono v2.
+// Uses paymentMiddleware + Resource (the documented v2 API) which automatically
+// registers EVM scheme implementations — no manual scheme import needed.
 // Set FORCE_PAYMENT=true to enable in dev/testnet without ENVIRONMENT=production.
 
-import { paymentMiddlewareFromConfig } from "@x402/hono";
-import { HTTPFacilitatorClient } from "@x402/core/server";
+import { paymentMiddleware, Resource } from "@x402/hono";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "../types";
 import { ROUTE_PRICE_MAP } from "../config/pricing";
 
 const TESTNET_FACILITATOR = "https://x402.org/facilitator";
 const PROD_FACILITATOR   = "https://api.cdp.coinbase.com/platform/v2/x402";
-
-// Base Sepolia testnet CAIP-2; Base mainnet for production
-const TESTNET_NETWORK = "eip155:84532";
-const MAINNET_NETWORK = "eip155:8453";
-
-// Determine HTTP method from route path (all trading = GET, coding/analysis = POST)
-function methodForPath(path: string): "GET" | "POST" {
-  return path.includes("/trading/") ? "GET" : "POST";
-}
 
 export function createX402Middleware(env: Env): MiddlewareHandler {
   const isPaymentEnabled =
@@ -30,24 +21,17 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
 
   const isProd = env.ENVIRONMENT === "production" && !!env.CDP_API_KEY_ID;
   const facilitatorUrl = isProd ? PROD_FACILITATOR : TESTNET_FACILITATOR;
-  const network        = isProd ? MAINNET_NETWORK  : TESTNET_NETWORK;
+  const network        = isProd ? "base" : "base-sepolia";
 
-  const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
+  const resources = Object.entries(ROUTE_PRICE_MAP).map(([path, pricing]) =>
+    Resource(path, {
+      price:   `$${pricing.usdAmount}`,
+      network,
+      payTo:   env.EVM_PAYEE_ADDRESS,
+    })
+  );
 
-  // Build x402 RoutesConfig: keys are "METHOD /full/path"
-  const routes: Record<string, unknown> = {};
-  for (const [path, pricing] of Object.entries(ROUTE_PRICE_MAP)) {
-    const method = methodForPath(path);
-    routes[`${method} ${path}`] = {
-      accepts: [{
-        payTo:  env.EVM_PAYEE_ADDRESS,
-        scheme: "exact",
-        price:  `$${pricing.usdAmount}`,
-        network,
-      }],
-    };
-  }
-
+  // paymentMiddleware handles EVM scheme registration internally
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return paymentMiddlewareFromConfig(routes as any, facilitatorClient as any);
+  return paymentMiddleware(resources, { url: facilitatorUrl }) as any;
 }
