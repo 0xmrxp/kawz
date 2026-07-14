@@ -7,8 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 - CDP Bazaar auto-index pending
-- Caddyfile manual update di VPS belum dilakukan: `cp /opt/lobre/infra/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy`
 - "Input schema is missing" x15 — `[warning]` tidak blocking; `accepts[].extensions.bazaar` sudah dipasang via 402 interceptor
+
+---
+
+## [0.9.6-dev] — 2026-07-14 · Fix Discovery + Dead Code Cleanup
+
+### Fixed
+- `infra/Caddyfile` — tambah `handle /openapi.json { rewrite * /api/openapi.json; reverse_proxy localhost:3000 }`
+  Root cause: x402scan dan mppscan cari OpenAPI spec di `https://lobre.lat/openapi.json` (root path),
+  tapi Caddyfile tidak punya route untuk itu — static fallback `try_files` melayani `index.html` (HTML, bukan JSON)
+  → kedua scanner return "No discovery document found" / "No discoverable endpoints found".
+  **Catatan**: setelah push, jalankan manual di VPS:
+  `cp /opt/lobre/infra/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy`
+- `docs.astro` — fix harga di systemPrompt string: `$0.005` → `$0.050` (refactor-suggest), `$0.006` → `$0.060` (security-audit)
+
+### Cleanup
+- `middleware/x402.ts` — hapus dead code: `const bazaar = BAZAAR_META[path]` dan `const acceptSchema = BAZAAR_ACCEPT_SCHEMA[path]`
+  Kedua variabel tidak digunakan sejak fix 0.9.5 (extensions dihapus dari route config)
 
 ---
 

@@ -1,4 +1,10 @@
 lobre.lat {
+	# OpenAPI spec — proxied to backend so x402scan/mppscan can discover endpoints
+	handle /openapi.json {
+		rewrite * /api/openapi.json
+		reverse_proxy localhost:3000
+	}
+
 	# API backend — Bun server on port 3000
 	handle /api/* {
 		reverse_proxy localhost:3000

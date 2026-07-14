@@ -142,9 +142,6 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
   const routes: Record<string, unknown> = {};
   for (const [path, pricing] of Object.entries(ROUTE_PRICE_MAP)) {
     const method  = methodForPath(path);
-    const bazaar  = BAZAAR_META[path];
-
-    const acceptSchema = BAZAAR_ACCEPT_SCHEMA[path];
 
     routes[`${method} ${path}`] = {
       accepts: [{
