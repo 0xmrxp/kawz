@@ -19,6 +19,7 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           script: |
             set -e
+            export PATH="$PATH:/root/.bun/bin"
             cd /opt/lobre
             git pull origin main
             bun install --frozen-lockfile
