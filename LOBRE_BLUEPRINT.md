@@ -68,7 +68,7 @@
 | **Payment — MPP** | `mppx` / `mppx/hono` (Tempo settlement) | Tidak berubah |
 | **Data Cache** | **Redis** (self-hosted di VPS, `ioredis`) | Menggantikan Cloudflare KV; API hampir identik untuk pola cache-aside |
 | **Data CEX** | **CCXT** (full import, tidak ada bundle size limit di VPS) | Di VPS tidak ada limit 1MB/10MB seperti Workers — `import ccxt from 'ccxt'` aman |
-| **AI Inference — LLM** | **Groq API** (`groq-sdk`, model `llama-3.1-70b-versatile`) | Free tier: 14.400 req/hari, 6.000 tokens/menit — cukup untuk MVP |
+| **AI Inference — LLM** | **Groq API** (`groq-sdk`, model `llama-3.3-70b-versatile`) | Free tier: 14.400 req/hari, 6.000 tokens/menit — cukup untuk MVP |
 | **AI Inference — Embedding** | **`@xenova/transformers`** (model `BAAI/bge-base-en-v1.5`) | Jalan di CPU lokal, tanpa API key, tanpa biaya eksternal — cocok untuk VPS |
 | **Vector DB** | **Qdrant** (Docker, self-hosted di VPS) | Gratis penuh, gRPC + REST API, high-performance |
 | **Frontend** | **Astro v4 + Tailwind CSS v4** (statis, SEO 100/100) | Build output disajikan sebagai static files via Caddy |
@@ -572,7 +572,7 @@ Tidak butuh API eksternal sama sekali:
 ### 7.3 Bundle 3 — Live Vector Pruner / Analysis
 
 - `heartbeat` (cosine similarity) → **`@xenova/transformers`** jalan lokal di VPS: load model `BAAI/bge-base-en-v1.5` sekali saat startup (model ~400MB, cached di disk), generate embedding di CPU, hitung cosine similarity manual. Tanpa API key, tanpa biaya eksternal, latensi ~50-150ms di CPU VPS standar.
-- `entity-extractor`, `bias-detector` → **Groq API** (`groq-sdk`, model `llama-3.1-70b-versatile`): output JSON terstruktur via `response_format: { type: "json_object" }`. Free tier: 14.400 req/hari, 6.000 tokens/menit — cukup untuk MVP.
+- `entity-extractor`, `bias-detector` → **Groq API** (`groq-sdk`, model `llama-3.3-70b-versatile`): output JSON terstruktur via `response_format: { type: "json_object" }`. Free tier: 14.400 req/hari, 6.000 tokens/menit — cukup untuk MVP.
 - `context-ranker` → kombinasi bge embedding (`@xenova/transformers`) + **Qdrant** (self-hosted Docker di VPS, REST API port 6333). Qdrant gratis penuh, tidak ada kuota.
 - `fact-linkage` → **Google Fact Check Tools API** (gratis, API key Google Cloud, database ClaimReview global) sebagai sumber utama. Keterbatasan: hanya klaim yang **sudah pernah** di-fact-check manusia — untuk klaim baru, fallback ke Groq LLM + grounding search. Tetap endpoint termahal ($0.012) karena gabungan external API call + LLM inference.
 
@@ -1071,7 +1071,7 @@ Payments settle in USDC on Base, Solana, or Tempo.
 
 ### **Phase 5 — Bundle 3: Analysis / Vector Pruner**
 - [ ] Setup `@xenova/transformers`, implementasi `heartbeat` (embedding CPU lokal + cosine similarity).
-- [ ] Implementasi `entity-extractor` dan `bias-detector` via Groq API (`llama-3.1-70b-versatile`, JSON output).
+- [ ] Implementasi `entity-extractor` dan `bias-detector` via Groq API (`llama-3.3-70b-versatile`, JSON output).
 - [ ] Setup Qdrant collection, implementasi `context-ranker` (bge embedding + Qdrant search).
 - [ ] Implementasi `fact-linkage` (Google Fact Check Tools API + Groq fallback).
 

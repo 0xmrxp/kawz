@@ -1,0 +1,17 @@
+lobre.lat {
+	# API backend — Bun server on port 3000
+	handle /api/* {
+		reverse_proxy localhost:3000
+	}
+
+	# Frontend static files — Astro build output
+	handle {
+		root * /opt/lobre/src/frontend/dist
+		file_server
+		try_files {path} /index.html
+	}
+}
+
+www.lobre.lat {
+	redir https://lobre.lat{uri} permanent
+}

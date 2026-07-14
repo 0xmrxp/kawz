@@ -1,0 +1,28 @@
+node_modules/
+dist/
+.astro/
+.output/
+
+# Environment — never commit real secrets
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bun
+bun.lockb
+
+# Cache
+.cache/
+tmp/
+
+# Transformers model cache (large — stored on VPS disk, not in repo)
+.cache/huggingface/

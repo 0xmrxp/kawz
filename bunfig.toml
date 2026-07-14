@@ -1,0 +1,9 @@
+[install]
+# Lock versions on install — ensures reproducible builds on VPS
+frozen = false
+
+[run]
+bun = true
+
+[test]
+timeout = 30000
