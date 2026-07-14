@@ -1,0 +1,186 @@
+---
+import MainLayout from '../layouts/MainLayout.astro';
+import Header from '../components/Header.astro';
+import TerminalBox from '../components/TerminalBox.astro';
+import PricingRow from '../components/PricingRow.astro';
+
+const bundles = [
+  {
+    name: "Trading Intelligence",
+    description: "Live market vitals, funding rates, orderbook depth, whale tracking, and MEV risk — from hybrid CEX + on-chain sources.",
+    from: "$0.002",
+    endpoints: ["vitals", "orderbook-depth", "mev-risk-index", "funding-rates", "whale-tracker"],
+    accent: true,
+  },
+  {
+    name: "Coding Cache",
+    description: "AST dependency graphs, token compression, syntax validation, LLM refactor suggestions, and static security audits.",
+    from: "$0.002",
+    endpoints: ["dependency-tree", "token-compressor", "syntax-heartbeat", "refactor-suggest", "security-audit"],
+  },
+  {
+    name: "Research Pruner",
+    description: "Semantic similarity scoring, named entity extraction, context re-ranking, bias detection, and claim verification.",
+    from: "$0.003",
+    endpoints: ["heartbeat", "entity-extractor", "context-ranker", "bias-detector", "fact-linkage"],
+  },
+];
+
+const steps = [
+  { label: "onboard",  command: "npx agentcash onboard" },
+  { label: "try",      command: "npx agentcash try https://lobre.lat" },
+  { label: "add",      command: "npx agentcash add https://lobre.lat" },
+];
+
+const compare = [
+  ["Sign up for N services",    "One endpoint"],
+  ["Buy credits upfront",       "Pay per request"],
+  ["Rotate API keys",           "No credentials — payment is authentication"],
+  ["Monitor N bills",           "One ledger, on-chain, real-time"],
+  ["Agent asks permission",     "Agent decides within budget"],
+];
+---
+
+<MainLayout>
+  <Header />
+
+  <main style="max-width:72rem;margin:0 auto;padding:0 1.5rem;">
+
+    <!-- ─── Hero ─────────────────────────────────────────────────────────── -->
+    <section style="padding:5rem 0 4rem;">
+      <p style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#D4AF37;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:1.5rem;">
+        Agentic Infrastructure
+      </p>
+      <h1 style="font-size:clamp(2rem,5vw,3.5rem);font-weight:700;line-height:1.1;letter-spacing:-0.03em;color:#F3F4F6;max-width:36rem;margin-bottom:1rem;">
+        Infrastructure agents can keep reaching for.
+      </h1>
+      <p style="font-size:1.25rem;color:#9CA3AF;margin-bottom:0.75rem;">
+        Your agent explores. You pay pennies.
+      </p>
+      <p style="font-size:1rem;color:#9CA3AF;max-width:40rem;line-height:1.65;margin-bottom:3rem;">
+        Lobre unifies 15 utility endpoints across trading, coding, and research
+        behind one stateless interface. No sign-ups. No credential overhead.
+        Real-time settlement.
+      </p>
+
+      <!-- CLI Onboarding -->
+      <div style="max-width:32rem;">
+        <TerminalBox steps={steps} />
+      </div>
+    </section>
+
+    <!-- ─── Divider ───────────────────────────────────────────────────────── -->
+    <div style="border-top:2px solid #374151;margin-bottom:4rem;"></div>
+
+    <!-- ─── Bundle Pricing ───────────────────────────────────────────────── -->
+    <section style="margin-bottom:5rem;">
+      <h2 style="font-size:1.5rem;font-weight:700;letter-spacing:-0.02em;color:#F3F4F6;margin-bottom:0.5rem;">
+        Three bundles. One interface.
+      </h2>
+      <p style="color:#9CA3AF;margin-bottom:2rem;font-size:0.9375rem;">
+        Every endpoint is pay-per-request. Your agent only pays for what it uses.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
+        {bundles.map((b) => (
+          <PricingRow
+            name={b.name}
+            description={b.description}
+            from={b.from}
+            endpoints={b.endpoints}
+            accent={b.accent}
+          />
+        ))}
+      </div>
+    </section>
+
+    <!-- ─── Divider ───────────────────────────────────────────────────────── -->
+    <div style="border-top:2px solid #374151;margin-bottom:4rem;"></div>
+
+    <!-- ─── Comparison table ─────────────────────────────────────────────── -->
+    <section style="margin-bottom:5rem;">
+      <h2 style="font-size:1.5rem;font-weight:700;letter-spacing:-0.02em;color:#F3F4F6;margin-bottom:2rem;">
+        Human-managed tooling → Autonomous execution
+      </h2>
+      <div style="border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;overflow:hidden;">
+        <!-- Header row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;background:#282D37;border-bottom:2px solid #374151;">
+          <div style="padding:0.75rem 1.25rem;font-size:0.75rem;color:#9CA3AF;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;">
+            Old way
+          </div>
+          <div style="padding:0.75rem 1.25rem;font-size:0.75rem;color:#D4AF37;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;border-left:2px solid #374151;">
+            Agentic way
+          </div>
+        </div>
+        {compare.map(([old, modern], i) => (
+          <div
+            style={`display:grid;grid-template-columns:1fr 1fr;${i < compare.length - 1 ? "border-bottom:1px solid #374151;" : ""}`}
+          >
+            <div style="padding:0.875rem 1.25rem;font-size:0.9375rem;color:#9CA3AF;">
+              {i + 1}. {old}
+            </div>
+            <div style="padding:0.875rem 1.25rem;font-size:0.9375rem;color:#F3F4F6;border-left:2px solid #374151;">
+              {i + 1}. {modern}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- ─── Divider ───────────────────────────────────────────────────────── -->
+    <div style="border-top:2px solid #374151;margin-bottom:4rem;"></div>
+
+    <!-- ─── Discovery CTA ────────────────────────────────────────────────── -->
+    <section style="margin-bottom:5rem;">
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+        <a
+          href="/api/openapi.json"
+          target="_blank" rel="noopener noreferrer"
+          style="display:inline-block;padding:0.625rem 1.25rem;border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;color:#9CA3AF;text-decoration:none;"
+        >
+          /openapi.json
+        </a>
+        <a
+          href="/llms.txt"
+          target="_blank" rel="noopener noreferrer"
+          style="display:inline-block;padding:0.625rem 1.25rem;border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;color:#9CA3AF;text-decoration:none;"
+        >
+          /llms.txt
+        </a>
+        <a
+          href="/docs"
+          style="display:inline-block;padding:0.625rem 1.25rem;border:2px solid #D4AF37;box-shadow:4px 4px 0 0 #D4AF37;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;color:#D4AF37;text-decoration:none;"
+        >
+          docs →
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ─── Footer ─────────────────────────────────────────────────────────── -->
+  <footer style="border-top:2px solid #374151;padding:2rem 1.5rem;">
+    <div style="max-width:72rem;margin:0 auto;display:flex;flex-direction:column;gap:0.75rem;">
+      <p style="font-size:0.875rem;color:#9CA3AF;line-height:1.6;">
+        Built on open standards for agentic payments from Coinbase and Tempo.<br />
+        Payments settle in USDC on Base, Solana, or Tempo.
+      </p>
+      <nav style="display:flex;gap:1.25rem;flex-wrap:wrap;">
+        {[
+          ["/llms.txt", "/llms.txt", true],
+          ["/docs", "Docs", false],
+          ["https://x402.org", "x402", true],
+          ["https://mpp.dev", "MPP", true],
+        ].map(([href, label, external]) => (
+          <a
+            href={String(href)}
+            target={external ? "_blank" : undefined}
+            rel={external ? "noopener noreferrer" : undefined}
+            style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;"
+          >
+            {String(label)}
+          </a>
+        ))}
+      </nav>
+    </div>
+  </footer>
+</MainLayout>

@@ -1,0 +1,29 @@
+---
+export interface Props {
+  name: string;
+  description: string;
+  from: string;
+  endpoints: string[];
+  accent?: boolean;
+}
+const { name, description, from, endpoints, accent = false } = Astro.props;
+const borderColor = accent ? "#D4AF37" : "#374151";
+const shadowColor = accent ? "#D4AF37" : "#374151";
+---
+
+<div style={`background:#282D37;border:2px solid ${borderColor};box-shadow:4px 4px 0 0 ${shadowColor};padding:1.5rem;`}>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;">
+    <h3 style="font-size:1rem;font-weight:700;color:#F3F4F6;letter-spacing:-0.01em;">{name}</h3>
+    <span style={`font-family:'JetBrains Mono',monospace;font-size:0.875rem;color:${accent ? "#D4AF37" : "#9CA3AF"};`}>
+      from {from}
+    </span>
+  </div>
+  <p style="font-size:0.875rem;color:#9CA3AF;margin-bottom:1rem;">{description}</p>
+  <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:0.25rem;">
+    {endpoints.map((ep) => (
+      <li style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;">
+        <span style="color:#374151;margin-right:0.5rem;">—</span>{ep}
+      </li>
+    ))}
+  </ul>
+</div>

@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-slate-950:  #1E2229;
+  --color-slate-900:  #282D37;
+  --color-slate-700:  #374151;
+  --color-gold-500:   #D4AF37;
+  --color-gold-400:   #E5C158;
+  --color-text:       #F3F4F6;
+  --color-muted:      #9CA3AF;
+
+  --font-sans: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+html, body {
+  background-color: #1E2229;
+  color: #F3F4F6;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hard box shadow utility */
+.shadow-brutal { box-shadow: 4px 4px 0 0 #374151; }
+.shadow-brutal-gold { box-shadow: 4px 4px 0 0 #D4AF37; }

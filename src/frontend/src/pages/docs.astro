@@ -1,0 +1,222 @@
+---
+import MainLayout from '../layouts/MainLayout.astro';
+import Header from '../components/Header.astro';
+
+const endpoints = [
+  // Trading bundle
+  {
+    bundle: "Trading Intelligence",
+    method: "GET",
+    path: "/api/v1/trading/engine/vitals",
+    price: "$0.002",
+    summary: "Live BTC/ETH price, 24 h change, volume, and engine status from Binance. Falls back to CoinGecko on upstream failure.",
+    request: "No body required.",
+    response: '{ "success": true, "data": { "source": "binance", "btc": { "price_usd": 67420, "change_24h_pct": 2.4 }, "eth": { ... }, "timestamp": 1720000000000 } }',
+  },
+  {
+    bundle: "Trading Intelligence",
+    method: "GET",
+    path: "/api/v1/trading/engine/orderbook-depth",
+    price: "$0.005",
+    summary: "Binance orderbook bids/asks for a pair. Optional ?pair=ETH/USDT query parameter (default BTC/USDT). Returns spread, depth, and imbalance.",
+    request: "?pair=BTC/USDT (optional)",
+    response: '{ "success": true, "data": { "pair": "BTC/USDT", "best_bid": 67400, "best_ask": 67410, "spread_pct": 0.0149, "imbalance": -0.08, "bids": [...], "asks": [...] } }',
+  },
+  {
+    bundle: "Trading Intelligence",
+    method: "GET",
+    path: "/api/v1/trading/engine/mev-risk-index",
+    price: "$0.004",
+    summary: "MEV sandwich attack risk score (0–100) for the current Base block. Derived from gas price distribution and repeated-sender patterns.",
+    request: "No body required.",
+    response: '{ "success": true, "data": { "risk_score": 18, "risk_level": "low", "block_number": 16780000, "total_txs": 142 } }',
+  },
+  {
+    bundle: "Trading Intelligence",
+    method: "GET",
+    path: "/api/v1/trading/engine/funding-rates",
+    price: "$0.002",
+    summary: "Perpetual futures funding rates for BTC, ETH, and SOL from Binance Futures. Includes annualized rate and next funding timestamp.",
+    request: "No body required.",
+    response: '{ "success": true, "data": { "rates": [{ "symbol": "BTC/USDT:USDT", "funding_rate": 0.0001, "rate_pct": "0.0100%", "annualized_pct": 10.95 }] } }',
+  },
+  {
+    bundle: "Trading Intelligence",
+    method: "GET",
+    path: "/api/v1/trading/engine/whale-tracker",
+    price: "$0.008",
+    summary: "Recent USDC transfers on Base above $500K. Data from Blockscout — free, no API key required.",
+    request: "No body required.",
+    response: '{ "success": true, "data": { "large_transfers": [{ "hash": "0x...", "from": "0x...", "to": "0x...", "amount_usdc": 1250000 }], "threshold_usd": 500000 } }',
+  },
+  // Coding bundle
+  {
+    bundle: "Coding Cache",
+    method: "POST",
+    path: "/api/v1/coding/cache/dependency-tree",
+    price: "$0.003",
+    summary: "Parse import/export graph from JavaScript or TypeScript source code using @babel/parser.",
+    request: '{ "code": "import { Hono } from \'hono\';\nexport default app;", "filename": "server.ts" }',
+    response: '{ "success": true, "data": { "imports": ["hono"], "exports": [], "depth": 1 } }',
+  },
+  {
+    bundle: "Coding Cache",
+    method: "POST",
+    path: "/api/v1/coding/cache/token-compressor",
+    price: "$0.002",
+    summary: "Strip comments and collapse whitespace from source code to minimize LLM token usage.",
+    request: '{ "raw_code": "// This is a comment\\nconst x = 1;" }',
+    response: '{ "success": true, "data": { "compressed": "const x = 1;", "ratio_pct": 55, "original_bytes": 34, "compressed_bytes": 13 } }',
+  },
+  {
+    bundle: "Coding Cache",
+    method: "POST",
+    path: "/api/v1/coding/cache/syntax-heartbeat",
+    price: "$0.002",
+    summary: "Validate JavaScript/TypeScript/JSX syntax. Returns parse errors with position hints.",
+    request: '{ "code": "const x = ;" }',
+    response: '{ "success": true, "data": { "valid": false, "errors": ["UnexpectedToken (pos 10)"], "lines": 1 } }',
+  },
+  {
+    bundle: "Coding Cache",
+    method: "POST",
+    path: "/api/v1/coding/cache/refactor-suggest",
+    price: "$0.005",
+    summary: "LLM-powered refactoring suggestions. Returns structured JSON with severity, descriptions, and overall quality score.",
+    request: '{ "code": "function add(a,b) { return a+b }", "language": "javascript" }',
+    response: '{ "success": true, "data": { "suggestions": [{ "type": "naming", "severity": "low", "description": "Add type annotations" }], "overall_quality": "fair" } }',
+  },
+  {
+    bundle: "Coding Cache",
+    method: "POST",
+    path: "/api/v1/coding/cache/security-audit",
+    price: "$0.006",
+    summary: "Static security audit via LLM. Detects known-vulnerable patterns such as SQL injection, XSS, insecure eval, and hardcoded secrets.",
+    request: '{ "code": "db.query(`SELECT * FROM users WHERE id=${req.id}`)" }',
+    response: '{ "success": true, "data": { "vulnerabilities": [{ "id": "SQL001", "severity": "critical", "title": "SQL Injection" }], "risk_score": 85 } }',
+  },
+  // Analysis bundle
+  {
+    bundle: "Research Pruner",
+    method: "POST",
+    path: "/api/v1/analysis/memory/heartbeat",
+    price: "$0.003",
+    summary: "Cosine similarity between two texts using BAAI/bge-base-en-v1.5 embeddings. Runs on CPU — no external API call.",
+    request: '{ "text_a": "machine learning", "text_b": "artificial intelligence" }',
+    response: '{ "success": true, "data": { "similarity": 0.887, "similarity_pct": 88.7, "vector_dims": 768, "interpretation": "very similar" } }',
+  },
+  {
+    bundle: "Research Pruner",
+    method: "POST",
+    path: "/api/v1/analysis/memory/entity-extractor",
+    price: "$0.006",
+    summary: "Extract named entities (persons, organizations, locations, dates, money) from unstructured text via Groq LLM.",
+    request: '{ "text": "Satoshi Nakamoto published the Bitcoin whitepaper in 2008." }',
+    response: '{ "success": true, "data": { "entities": [{ "text": "Satoshi Nakamoto", "type": "PERSON", "confidence": "high" }], "entity_count": 3 } }',
+  },
+  {
+    bundle: "Research Pruner",
+    method: "POST",
+    path: "/api/v1/analysis/memory/context-ranker",
+    price: "$0.005",
+    summary: "Re-rank a list of text chunks by semantic relevance to a query using BGE embeddings and cosine similarity.",
+    request: '{ "query": "machine learning", "chunks": ["deep learning models", "spreadsheet formulas", "neural networks"] }',
+    response: '{ "success": true, "data": { "ranked": [{ "index": 0, "score": 0.921, "chunk": "deep learning models" }, ...] } }',
+  },
+  {
+    bundle: "Research Pruner",
+    method: "POST",
+    path: "/api/v1/analysis/memory/bias-detector",
+    price: "$0.005",
+    summary: "Detect framing bias, sentiment slant, and loaded language in text. Returns bias types, score, and specific examples.",
+    request: '{ "text": "The radical policy will destroy the economy." }',
+    response: '{ "success": true, "data": { "bias_detected": true, "bias_types": ["loaded_language"], "bias_score": 72, "confidence": "high" } }',
+  },
+  {
+    bundle: "Research Pruner",
+    method: "POST",
+    path: "/api/v1/analysis/memory/fact-linkage",
+    price: "$0.012",
+    summary: "Link a claim to verified fact-check records via Google Fact Check Tools API. Falls back to Groq LLM analysis for unverified claims.",
+    request: '{ "claim": "The moon landing was faked.", "language": "en" }',
+    response: '{ "success": true, "data": { "source": "google_factcheck", "claims": [{ "reviews": [{ "publisher": "Snopes", "rating": "False" }] }] } }',
+  },
+];
+
+const bundles = [...new Set(endpoints.map((e) => e.bundle))];
+---
+
+<MainLayout title="Docs — Lobre" description="Complete API reference for all 15 Lobre endpoints.">
+  <Header />
+
+  <main style="max-width:72rem;margin:0 auto;padding:2rem 1.5rem 4rem;">
+    <!-- Title -->
+    <div style="margin-bottom:2.5rem;">
+      <h1 style="font-size:2rem;font-weight:700;letter-spacing:-0.03em;color:#F3F4F6;margin-bottom:0.5rem;">
+        API Reference
+      </h1>
+      <p style="color:#9CA3AF;font-size:0.9375rem;">
+        All endpoints require payment via x402 or MPP. Clients receive a
+        <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.8125rem;">402 Payment Required</code>
+        challenge on first request and retry with proof attached.
+      </p>
+      <div style="display:flex;gap:0.75rem;margin-top:1rem;flex-wrap:wrap;">
+        <a href="/api/openapi.json" target="_blank" rel="noopener noreferrer"
+           style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;border:1px solid #374151;padding:0.25rem 0.75rem;">
+          /openapi.json
+        </a>
+        <a href="/llms.txt" target="_blank" rel="noopener noreferrer"
+           style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;border:1px solid #374151;padding:0.25rem 0.75rem;">
+          /llms.txt
+        </a>
+      </div>
+    </div>
+
+    <!-- Endpoints grouped by bundle -->
+    {bundles.map((bundle) => (
+      <section style="margin-bottom:3rem;">
+        <h2 style="font-size:1.125rem;font-weight:700;color:#D4AF37;margin-bottom:1.5rem;padding-bottom:0.5rem;border-bottom:2px solid #374151;">
+          {bundle}
+        </h2>
+
+        <div style="display:flex;flex-direction:column;gap:1.25rem;">
+          {endpoints.filter((e) => e.bundle === bundle).map((ep) => (
+            <div style="border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;">
+              <!-- Endpoint header -->
+              <div style="background:#282D37;padding:0.875rem 1.25rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;border-bottom:1px solid #374151;">
+                <span style={`font-family:'JetBrains Mono',monospace;font-size:0.75rem;font-weight:700;padding:0.15rem 0.5rem;border:1px solid #374151;color:${ep.method === "GET" ? "#D4AF37" : "#9CA3AF"};`}>
+                  {ep.method}
+                </span>
+                <code style="font-family:'JetBrains Mono',monospace;font-size:0.875rem;color:#F3F4F6;">
+                  {ep.path}
+                </code>
+                <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;color:#9CA3AF;">
+                  {ep.price}
+                </span>
+              </div>
+
+              <!-- Endpoint body -->
+              <div style="padding:1.25rem;display:flex;flex-direction:column;gap:1rem;">
+                <p style="font-size:0.9375rem;color:#9CA3AF;line-height:1.6;">{ep.summary}</p>
+
+                <div>
+                  <p style="font-size:0.75rem;color:#374151;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.375rem;">
+                    Request
+                  </p>
+                  <pre style="background:#1E2229;border:1px solid #374151;padding:0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre-wrap;">{ep.request}</pre>
+                </div>
+
+                <div>
+                  <p style="font-size:0.75rem;color:#374151;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.375rem;">
+                    Response
+                  </p>
+                  <pre style="background:#1E2229;border:1px solid #374151;padding:0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre-wrap;">{ep.response}</pre>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    ))}
+  </main>
+</MainLayout>
