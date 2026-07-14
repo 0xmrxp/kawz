@@ -2,34 +2,85 @@
 import MainLayout from '../layouts/MainLayout.astro';
 import Header from '../components/Header.astro';
 
+const systemPrompt = `You have access to Lobre (https://lobre.lat) — a pay-per-request utility API for autonomous AI agents.
+Use mcp__agentcash__fetch for all requests. Payment is handled automatically by AgentCash.
+
+WORKFLOW:
+1. mcp__agentcash__discover_api_endpoints(url="https://lobre.lat") — list all available routes with prices.
+2. mcp__agentcash__check_endpoint_schema(url="<endpoint>", method="POST") — check request body schema before POST calls.
+3. mcp__agentcash__fetch(url="<endpoint>", method="GET"|"POST", body={...}) — execute the call.
+
+TRADING INTELLIGENCE — GET, no body required:
+  https://lobre.lat/api/v1/trading/engine/vitals           $0.002  BTC/ETH live price, 24h change, volume (Binance/CoinGecko)
+  https://lobre.lat/api/v1/trading/engine/orderbook-depth  $0.005  Bids/asks, spread, imbalance — append ?pair=ETH/USDT to change pair
+  https://lobre.lat/api/v1/trading/engine/mev-risk-index   $0.004  MEV sandwich attack risk score 0–100 for current Base block
+  https://lobre.lat/api/v1/trading/engine/funding-rates    $0.002  BTC/ETH/SOL perpetual futures funding rates from Binance
+  https://lobre.lat/api/v1/trading/engine/whale-tracker    $0.008  USDC transfers on Base above $500K (Blockscout)
+
+CODING CACHE — POST, send JSON body:
+  https://lobre.lat/api/v1/coding/cache/dependency-tree    $0.003  body: { "code": "...", "filename": "app.ts" }
+  https://lobre.lat/api/v1/coding/cache/token-compressor   $0.002  body: { "raw_code": "..." }
+  https://lobre.lat/api/v1/coding/cache/syntax-heartbeat   $0.002  body: { "code": "..." }
+  https://lobre.lat/api/v1/coding/cache/refactor-suggest   $0.005  body: { "code": "...", "language": "typescript" }
+  https://lobre.lat/api/v1/coding/cache/security-audit     $0.006  body: { "code": "...", "language": "typescript" }
+
+RESEARCH PRUNER — POST, send JSON body:
+  https://lobre.lat/api/v1/analysis/memory/heartbeat         $0.003  body: { "text_a": "...", "text_b": "..." }
+  https://lobre.lat/api/v1/analysis/memory/entity-extractor  $0.006  body: { "text": "..." }
+  https://lobre.lat/api/v1/analysis/memory/context-ranker    $0.005  body: { "query": "...", "chunks": ["...", "..."] }
+  https://lobre.lat/api/v1/analysis/memory/bias-detector     $0.005  body: { "text": "..." }
+  https://lobre.lat/api/v1/analysis/memory/fact-linkage      $0.012  body: { "claim": "...", "language": "en" }
+
+RESPONSE FORMAT:
+  200 OK:  { "success": true, "bundle": "trading_engine"|"coding_cache"|"live_vector_pruner", "data": {...} }
+  402:     payment-required header contains base64 x402 v2 challenge — AgentCash handles this automatically.
+  503:     { "success": false, "error": "upstream unavailable" }
+
+IMPORTANT: Call endpoints through mcp__agentcash__fetch, not as separate MCP tools. Do not invent
+tool names like mcp__lobre__vitals — that does not exist. All 15 endpoints go through mcp__agentcash__fetch.`;
+
+const mcpConfig = `{
+  "mcpServers": {
+    "agentcash": {
+      "type": "streamable-http",
+      "url": "https://mcp.agentcash.dev"
+    }
+  }
+}`;
+
+const onboardingSteps = [
+  { label: "onboard", command: "npx agentcash onboard" },
+  { label: "try",     command: "npx agentcash try https://lobre.lat" },
+  { label: "add",     command: "npx agentcash add https://lobre.lat" },
+];
+
 const endpoints = [
-  // Trading bundle
   {
     bundle: "Trading Intelligence",
     method: "GET",
     path: "/api/v1/trading/engine/vitals",
     price: "$0.002",
-    summary: "Live BTC/ETH price, 24 h change, volume, and engine status from Binance. Falls back to CoinGecko on upstream failure.",
+    summary: "Live BTC/ETH price, 24h change, and volume from Binance. Automatic CoinGecko fallback on upstream failure.",
     request: "No body required.",
-    response: '{ "success": true, "data": { "source": "binance", "btc": { "price_usd": 67420, "change_24h_pct": 2.4 }, "eth": { ... }, "timestamp": 1720000000000 } }',
+    response: '{ "success": true, "data": { "source": "binance", "btc": { "price_usd": 67420, "change_24h_pct": 2.4, "volume_24h": 28441 }, "eth": { "price_usd": 3812, "change_24h_pct": 1.1 }, "timestamp": 1720000000000 } }',
   },
   {
     bundle: "Trading Intelligence",
     method: "GET",
     path: "/api/v1/trading/engine/orderbook-depth",
     price: "$0.005",
-    summary: "Binance orderbook bids/asks for a pair. Optional ?pair=ETH/USDT query parameter (default BTC/USDT). Returns spread, depth, and imbalance.",
-    request: "?pair=BTC/USDT (optional)",
-    response: '{ "success": true, "data": { "pair": "BTC/USDT", "best_bid": 67400, "best_ask": 67410, "spread_pct": 0.0149, "imbalance": -0.08, "bids": [...], "asks": [...] } }',
+    summary: "Binance orderbook bids/asks for a pair. Append ?pair=ETH/USDT to change pair (default BTC/USDT). Returns spread and book imbalance.",
+    request: "?pair=BTC/USDT (optional query param)",
+    response: '{ "success": true, "data": { "pair": "BTC/USDT", "best_bid": 67400, "best_ask": 67410, "spread_usd": 10, "spread_pct": 0.0149, "imbalance": -0.08, "bids": [[67400, 1.2], ...], "asks": [[67410, 0.9], ...] } }',
   },
   {
     bundle: "Trading Intelligence",
     method: "GET",
     path: "/api/v1/trading/engine/mev-risk-index",
     price: "$0.004",
-    summary: "MEV sandwich attack risk score (0–100) for the current Base block. Derived from gas price distribution and repeated-sender patterns.",
+    summary: "MEV sandwich attack risk score (0–100) for the current Base block. Derived from gas price distribution and repeated-sender heuristics.",
     request: "No body required.",
-    response: '{ "success": true, "data": { "risk_score": 18, "risk_level": "low", "block_number": 16780000, "total_txs": 142 } }',
+    response: '{ "success": true, "data": { "risk_score": 18, "risk_level": "low", "block_number": 16780000, "total_txs": 142, "high_gas_ratio_pct": 8 } }',
   },
   {
     bundle: "Trading Intelligence",
@@ -38,24 +89,23 @@ const endpoints = [
     price: "$0.002",
     summary: "Perpetual futures funding rates for BTC, ETH, and SOL from Binance Futures. Includes annualized rate and next funding timestamp.",
     request: "No body required.",
-    response: '{ "success": true, "data": { "rates": [{ "symbol": "BTC/USDT:USDT", "funding_rate": 0.0001, "rate_pct": "0.0100%", "annualized_pct": 10.95 }] } }',
+    response: '{ "success": true, "data": { "rates": [{ "symbol": "BTC/USDT:USDT", "funding_rate": 0.0001, "rate_pct": "0.0100%", "annualized_pct": 10.95, "next_funding_ms": 1720008000000 }] } }',
   },
   {
     bundle: "Trading Intelligence",
     method: "GET",
     path: "/api/v1/trading/engine/whale-tracker",
     price: "$0.008",
-    summary: "Recent USDC transfers on Base above $500K. Data from Blockscout — free, no API key required.",
+    summary: "Recent USDC transfers on Base above $500K. Sourced from Blockscout — no API key needed, cached 60 seconds.",
     request: "No body required.",
-    response: '{ "success": true, "data": { "large_transfers": [{ "hash": "0x...", "from": "0x...", "to": "0x...", "amount_usdc": 1250000 }], "threshold_usd": 500000 } }',
+    response: '{ "success": true, "data": { "large_transfers": [{ "hash": "0x...", "from": "0x...", "to": "0x...", "amount_usdc": 1250000, "age_seconds": 42 }], "threshold_usd": 500000 } }',
   },
-  // Coding bundle
   {
     bundle: "Coding Cache",
     method: "POST",
     path: "/api/v1/coding/cache/dependency-tree",
     price: "$0.003",
-    summary: "Parse import/export graph from JavaScript or TypeScript source code using @babel/parser.",
+    summary: "Parse import/export dependency graph from JavaScript or TypeScript source code using @babel/parser.",
     request: '{ "code": "import { Hono } from \'hono\';\nexport default app;", "filename": "server.ts" }',
     response: '{ "success": true, "data": { "imports": ["hono"], "exports": [], "depth": 1 } }',
   },
@@ -64,7 +114,7 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/coding/cache/token-compressor",
     price: "$0.002",
-    summary: "Strip comments and collapse whitespace from source code to minimize LLM token usage.",
+    summary: "Strip comments and collapse whitespace to minimize LLM token usage. Returns compression ratio.",
     request: '{ "raw_code": "// This is a comment\\nconst x = 1;" }',
     response: '{ "success": true, "data": { "compressed": "const x = 1;", "ratio_pct": 55, "original_bytes": 34, "compressed_bytes": 13 } }',
   },
@@ -73,7 +123,7 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/coding/cache/syntax-heartbeat",
     price: "$0.002",
-    summary: "Validate JavaScript/TypeScript/JSX syntax. Returns parse errors with position hints.",
+    summary: "Validate JavaScript/TypeScript/JSX syntax and return parse errors with position hints.",
     request: '{ "code": "const x = ;" }',
     response: '{ "success": true, "data": { "valid": false, "errors": ["UnexpectedToken (pos 10)"], "lines": 1 } }',
   },
@@ -82,26 +132,25 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/coding/cache/refactor-suggest",
     price: "$0.005",
-    summary: "LLM-powered refactoring suggestions. Returns structured JSON with severity, descriptions, and overall quality score.",
+    summary: "LLM-powered refactoring suggestions. Returns severity-rated findings and overall code quality score.",
     request: '{ "code": "function add(a,b) { return a+b }", "language": "javascript" }',
-    response: '{ "success": true, "data": { "suggestions": [{ "type": "naming", "severity": "low", "description": "Add type annotations" }], "overall_quality": "fair" } }',
+    response: '{ "success": true, "data": { "suggestions": [{ "type": "naming", "severity": "low", "description": "Add type annotations" }], "overall_quality": "fair", "summary": "..." } }',
   },
   {
     bundle: "Coding Cache",
     method: "POST",
     path: "/api/v1/coding/cache/security-audit",
     price: "$0.006",
-    summary: "Static security audit via LLM. Detects known-vulnerable patterns such as SQL injection, XSS, insecure eval, and hardcoded secrets.",
-    request: '{ "code": "db.query(`SELECT * FROM users WHERE id=${req.id}`)" }',
-    response: '{ "success": true, "data": { "vulnerabilities": [{ "id": "SQL001", "severity": "critical", "title": "SQL Injection" }], "risk_score": 85 } }',
+    summary: "Static security audit via LLM. Detects SQL injection, XSS, insecure eval, and hardcoded secrets.",
+    request: '{ "code": "db.query(`SELECT * FROM users WHERE id=${req.id}`)", "language": "javascript" }',
+    response: '{ "success": true, "data": { "vulnerabilities": [{ "id": "SQL001", "severity": "critical", "title": "SQL Injection", "recommendation": "Use parameterized queries" }], "risk_score": 85 } }',
   },
-  // Analysis bundle
   {
     bundle: "Research Pruner",
     method: "POST",
     path: "/api/v1/analysis/memory/heartbeat",
     price: "$0.003",
-    summary: "Cosine similarity between two texts using BAAI/bge-base-en-v1.5 embeddings. Runs on CPU — no external API call.",
+    summary: "Cosine similarity between two texts using BAAI/bge-base-en-v1.5 embeddings (768 dims). Runs on-device — no external API call.",
     request: '{ "text_a": "machine learning", "text_b": "artificial intelligence" }',
     response: '{ "success": true, "data": { "similarity": 0.887, "similarity_pct": 88.7, "vector_dims": 768, "interpretation": "very similar" } }',
   },
@@ -110,34 +159,34 @@ const endpoints = [
     method: "POST",
     path: "/api/v1/analysis/memory/entity-extractor",
     price: "$0.006",
-    summary: "Extract named entities (persons, organizations, locations, dates, money) from unstructured text via Groq LLM.",
+    summary: "Extract named entities (persons, orgs, locations, dates, money) from unstructured text via LLM.",
     request: '{ "text": "Satoshi Nakamoto published the Bitcoin whitepaper in 2008." }',
-    response: '{ "success": true, "data": { "entities": [{ "text": "Satoshi Nakamoto", "type": "PERSON", "confidence": "high" }], "entity_count": 3 } }',
+    response: '{ "success": true, "data": { "entities": [{ "text": "Satoshi Nakamoto", "type": "PERSON", "confidence": "high" }, { "text": "2008", "type": "DATE", "confidence": "high" }], "entity_count": 3 } }',
   },
   {
     bundle: "Research Pruner",
     method: "POST",
     path: "/api/v1/analysis/memory/context-ranker",
     price: "$0.005",
-    summary: "Re-rank a list of text chunks by semantic relevance to a query using BGE embeddings and cosine similarity.",
+    summary: "Re-rank text chunks by semantic relevance to a query using BGE embeddings and cosine similarity.",
     request: '{ "query": "machine learning", "chunks": ["deep learning models", "spreadsheet formulas", "neural networks"] }',
-    response: '{ "success": true, "data": { "ranked": [{ "index": 0, "score": 0.921, "chunk": "deep learning models" }, ...] } }',
+    response: '{ "success": true, "data": { "ranked": [{ "index": 0, "score": 0.921, "chunk": "deep learning models" }, { "index": 2, "score": 0.889, "chunk": "neural networks" }, { "index": 1, "score": 0.102, "chunk": "spreadsheet formulas" }] } }',
   },
   {
     bundle: "Research Pruner",
     method: "POST",
     path: "/api/v1/analysis/memory/bias-detector",
     price: "$0.005",
-    summary: "Detect framing bias, sentiment slant, and loaded language in text. Returns bias types, score, and specific examples.",
+    summary: "Detect framing bias, sentiment slant, and loaded language in text. Returns score and specific examples.",
     request: '{ "text": "The radical policy will destroy the economy." }',
-    response: '{ "success": true, "data": { "bias_detected": true, "bias_types": ["loaded_language"], "bias_score": 72, "confidence": "high" } }',
+    response: '{ "success": true, "data": { "bias_detected": true, "bias_types": ["loaded_language", "framing"], "bias_score": 72, "confidence": "high", "examples": [{ "phrase": "radical", "type": "loaded_language" }] } }',
   },
   {
     bundle: "Research Pruner",
     method: "POST",
     path: "/api/v1/analysis/memory/fact-linkage",
     price: "$0.012",
-    summary: "Link a claim to verified fact-check records via Google Fact Check Tools API. Falls back to Groq LLM analysis for unverified claims.",
+    summary: "Link a claim to verified fact-check records via Google Fact Check Tools API (ClaimReview database). Falls back to LLM analysis for unverified claims.",
     request: '{ "claim": "The moon landing was faked.", "language": "en" }',
     response: '{ "success": true, "data": { "source": "google_factcheck", "claims": [{ "reviews": [{ "publisher": "Snopes", "rating": "False" }] }] } }',
   },
@@ -146,21 +195,20 @@ const endpoints = [
 const bundles = [...new Set(endpoints.map((e) => e.bundle))];
 ---
 
-<MainLayout title="Docs — Lobre" description="Complete API reference for all 15 Lobre endpoints.">
+<MainLayout title="Docs — Lobre" description="How to integrate Lobre with your AI agent. System prompt, MCP setup, and full API reference for all 15 endpoints.">
   <Header />
 
-  <main style="max-width:72rem;margin:0 auto;padding:2rem 1.5rem 4rem;">
-    <!-- Title -->
+  <main style="max-width:72rem;margin:0 auto;padding:2rem 1.5rem 5rem;">
+
+    <!-- ─── Title ─────────────────────────────────────────────────────────── -->
     <div style="margin-bottom:2.5rem;">
       <h1 style="font-size:2rem;font-weight:700;letter-spacing:-0.03em;color:#F3F4F6;margin-bottom:0.5rem;">
-        API Reference
+        Docs
       </h1>
-      <p style="color:#9CA3AF;font-size:0.9375rem;">
-        All endpoints require payment via x402 or MPP. Clients receive a
-        <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.8125rem;">402 Payment Required</code>
-        challenge on first request and retry with proof attached.
+      <p style="color:#9CA3AF;font-size:0.9375rem;margin-bottom:1rem;">
+        Everything you need to connect an AI agent to Lobre.
       </p>
-      <div style="display:flex;gap:0.75rem;margin-top:1rem;flex-wrap:wrap;">
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
         <a href="/api/openapi.json" target="_blank" rel="noopener noreferrer"
            style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;border:1px solid #374151;padding:0.25rem 0.75rem;">
           /openapi.json
@@ -169,54 +217,195 @@ const bundles = [...new Set(endpoints.map((e) => e.bundle))];
            style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;border:1px solid #374151;padding:0.25rem 0.75rem;">
           /llms.txt
         </a>
+        <a href="/api/mcp" target="_blank" rel="noopener noreferrer"
+           style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;border:1px solid #374151;padding:0.25rem 0.75rem;">
+          /api/mcp
+        </a>
       </div>
     </div>
 
-    <!-- Endpoints grouped by bundle -->
-    {bundles.map((bundle) => (
-      <section style="margin-bottom:3rem;">
-        <h2 style="font-size:1.125rem;font-weight:700;color:#D4AF37;margin-bottom:1.5rem;padding-bottom:0.5rem;border-bottom:2px solid #374151;">
-          {bundle}
-        </h2>
+    <div style="border-top:2px solid #374151;margin-bottom:3rem;"></div>
 
-        <div style="display:flex;flex-direction:column;gap:1.25rem;">
-          {endpoints.filter((e) => e.bundle === bundle).map((ep) => (
-            <div style="border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;">
-              <!-- Endpoint header -->
-              <div style="background:#282D37;padding:0.875rem 1.25rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;border-bottom:1px solid #374151;">
-                <span style={`font-family:'JetBrains Mono',monospace;font-size:0.75rem;font-weight:700;padding:0.15rem 0.5rem;border:1px solid #374151;color:${ep.method === "GET" ? "#D4AF37" : "#9CA3AF"};`}>
-                  {ep.method}
-                </span>
-                <code style="font-family:'JetBrains Mono',monospace;font-size:0.875rem;color:#F3F4F6;">
-                  {ep.path}
-                </code>
-                <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;color:#9CA3AF;">
-                  {ep.price}
-                </span>
-              </div>
+    <!-- ─── What is Lobre ──────────────────────────────────────────────────── -->
+    <section style="margin-bottom:3rem;">
+      <h2 style="font-size:1.125rem;font-weight:700;color:#D4AF37;margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:2px solid #374151;">
+        What is offered through Lobre?
+      </h2>
+      <p style="color:#9CA3AF;font-size:0.9375rem;line-height:1.7;max-width:56rem;">
+        Lobre provides 15 pay-per-request utility endpoints across three bundles: live trading data
+        (market vitals, orderbook depth, MEV risk, funding rates, whale tracking), code intelligence
+        (AST parsing, token compression, syntax validation, LLM-powered refactoring, security audits),
+        and research tools (semantic similarity, entity extraction, context ranking, bias detection,
+        claim verification). All endpoints require micropayment in USDC — no sign-up, no API keys.
+        Payment is the credential.
+      </p>
+      <p style="color:#9CA3AF;font-size:0.9375rem;line-height:1.7;max-width:56rem;margin-top:0.75rem;">
+        Full specifications are available in <a href="/llms.txt" style="color:#D4AF37;text-decoration:none;">/llms.txt</a>
+        and <a href="/api/openapi.json" target="_blank" rel="noopener noreferrer" style="color:#D4AF37;text-decoration:none;">/api/openapi.json</a>.
+      </p>
+    </section>
 
-              <!-- Endpoint body -->
-              <div style="padding:1.25rem;display:flex;flex-direction:column;gap:1rem;">
-                <p style="font-size:0.9375rem;color:#9CA3AF;line-height:1.6;">{ep.summary}</p>
+    <!-- ─── Getting Started ────────────────────────────────────────────────── -->
+    <section style="margin-bottom:3rem;">
+      <h2 style="font-size:1.125rem;font-weight:700;color:#D4AF37;margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:2px solid #374151;">
+        How to use with an AI agent?
+      </h2>
 
-                <div>
-                  <p style="font-size:0.75rem;color:#374151;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.375rem;">
-                    Request
-                  </p>
-                  <pre style="background:#1E2229;border:1px solid #374151;padding:0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre-wrap;">{ep.request}</pre>
-                </div>
+      <p style="color:#9CA3AF;font-size:0.9375rem;margin-bottom:1.25rem;">
+        Lobre works with any agent that supports AgentCash. Run these three commands once:
+      </p>
 
-                <div>
-                  <p style="font-size:0.75rem;color:#374151;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.375rem;">
-                    Response
-                  </p>
-                  <pre style="background:#1E2229;border:1px solid #374151;padding:0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre-wrap;">{ep.response}</pre>
-                </div>
-              </div>
-            </div>
-          ))}
+      <div style="background:#282D37;border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;padding:1.5rem;max-width:36rem;margin-bottom:1.5rem;">
+        <div style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center;">
+          <div style="width:0.6rem;height:0.6rem;border-radius:50%;background:#374151;"></div>
+          <div style="width:0.6rem;height:0.6rem;border-radius:50%;background:#374151;"></div>
+          <div style="width:0.6rem;height:0.6rem;border-radius:50%;background:#374151;"></div>
+          <span style="margin-left:0.5rem;font-size:0.75rem;color:#9CA3AF;font-family:'JetBrains Mono',monospace;">terminal</span>
         </div>
-      </section>
-    ))}
+        {onboardingSteps.map((step, i) => (
+          <div style={i < onboardingSteps.length - 1 ? "margin-bottom:0.75rem;" : ""}>
+            <span style="color:#9CA3AF;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;">
+              step {i + 1} — {step.label}
+            </span>
+            <br />
+            <span style="color:#D4AF37;font-family:'JetBrains Mono',monospace;font-size:0.875rem;">
+              $ {step.command}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:0.5rem;max-width:48rem;">
+        <p style="color:#9CA3AF;font-size:0.875rem;line-height:1.6;">
+          <strong style="color:#F3F4F6;">Wallet:</strong>
+          After running <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.75rem;">agentcash onboard</code>,
+          a wallet is generated at <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.75rem;">~/.agentcash/wallet.json</code>.
+          Deposit USDC (Base mainnet) before the first call.
+        </p>
+        <p style="color:#9CA3AF;font-size:0.875rem;line-height:1.6;">
+          <strong style="color:#F3F4F6;">Balance:</strong>
+          Use <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.75rem;">mcp__agentcash__get_balance</code> to check your wallet balance and address.
+        </p>
+      </div>
+    </section>
+
+    <!-- ─── System Prompt ──────────────────────────────────────────────────── -->
+    <section style="margin-bottom:3rem;">
+      <h2 style="font-size:1.125rem;font-weight:700;color:#D4AF37;margin-bottom:0.5rem;padding-bottom:0.5rem;border-bottom:2px solid #374151;">
+        System prompt for your AI agent
+      </h2>
+      <p style="color:#9CA3AF;font-size:0.875rem;margin-bottom:1rem;">
+        Paste this into your agent's system prompt or Claude project instructions to give it full access to Lobre.
+      </p>
+      <div style="border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;">
+        <div style="background:#282D37;padding:0.5rem 1rem;border-bottom:1px solid #374151;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;">system prompt</span>
+        </div>
+        <pre style="background:#1E2229;padding:1.25rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre;line-height:1.55;">{systemPrompt}</pre>
+      </div>
+    </section>
+
+    <!-- ─── MCP Integration ────────────────────────────────────────────────── -->
+    <section style="margin-bottom:3rem;">
+      <h2 style="font-size:1.125rem;font-weight:700;color:#D4AF37;margin-bottom:0.5rem;padding-bottom:0.5rem;border-bottom:2px solid #374151;">
+        MCP integration
+      </h2>
+      <p style="color:#9CA3AF;font-size:0.875rem;margin-bottom:1rem;">
+        Lobre exposes all 15 endpoints as MCP tools via Streamable HTTP Transport. Compatible with Claude Desktop, Claude Code, and any MCP-capable agent.
+      </p>
+      <p style="color:#9CA3AF;font-size:0.875rem;margin-bottom:1rem;">
+        Add to <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.75rem;">~/.claude/claude_desktop_config.json</code> (Claude Desktop) or use <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.75rem;">claude mcp add</code> (Claude Code):
+      </p>
+      <div style="border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;margin-bottom:1rem;">
+        <div style="background:#282D37;padding:0.5rem 1rem;border-bottom:1px solid #374151;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;">claude_desktop_config.json</span>
+        </div>
+        <pre style="background:#1E2229;padding:1.25rem;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre;">{mcpConfig}</pre>
+      </div>
+      <p style="color:#9CA3AF;font-size:0.8125rem;">
+        MCP endpoint: <a href="/api/mcp" target="_blank" rel="noopener noreferrer" style="color:#D4AF37;font-family:'JetBrains Mono',monospace;text-decoration:none;">https://lobre.lat/api/mcp</a>
+        — 15 tools, mirroring every REST endpoint. Payment via AgentCash MCP tools.
+      </p>
+    </section>
+
+    <div style="border-top:2px solid #374151;margin-bottom:3rem;"></div>
+
+    <!-- ─── API Reference ──────────────────────────────────────────────────── -->
+    <section>
+      <h2 style="font-size:1.5rem;font-weight:700;letter-spacing:-0.02em;color:#F3F4F6;margin-bottom:0.5rem;">
+        API Reference
+      </h2>
+      <p style="color:#9CA3AF;font-size:0.9375rem;margin-bottom:2rem;">
+        All endpoints require payment via x402 or MPP. On first request without payment, the server returns
+        <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.8125rem;">402 Payment Required</code>
+        with the challenge in the <code style="font-family:'JetBrains Mono',monospace;background:#282D37;padding:0.1rem 0.4rem;font-size:0.8125rem;">payment-required</code> header.
+        AgentCash clients handle this automatically.
+      </p>
+
+      {bundles.map((bundle) => (
+        <div style="margin-bottom:3rem;">
+          <h3 style="font-size:1rem;font-weight:700;color:#D4AF37;margin-bottom:1.25rem;padding-bottom:0.375rem;border-bottom:1px solid #374151;">
+            {bundle}
+          </h3>
+
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            {endpoints.filter((e) => e.bundle === bundle).map((ep) => (
+              <div style="border:2px solid #374151;box-shadow:4px 4px 0 0 #374151;">
+                <div style="background:#282D37;padding:0.75rem 1.25rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;border-bottom:1px solid #374151;">
+                  <span style={`font-family:'JetBrains Mono',monospace;font-size:0.7rem;font-weight:700;padding:0.15rem 0.5rem;border:1px solid #374151;color:${ep.method === "GET" ? "#D4AF37" : "#9CA3AF"};`}>
+                    {ep.method}
+                  </span>
+                  <code style="font-family:'JetBrains Mono',monospace;font-size:0.875rem;color:#F3F4F6;">
+                    {ep.path}
+                  </code>
+                  <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:0.8125rem;color:#9CA3AF;">
+                    {ep.price}
+                  </span>
+                </div>
+                <div style="padding:1rem 1.25rem;display:flex;flex-direction:column;gap:0.875rem;">
+                  <p style="font-size:0.9rem;color:#9CA3AF;line-height:1.6;margin:0;">{ep.summary}</p>
+                  <div>
+                    <p style="font-size:0.7rem;color:#374151;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Request</p>
+                    <pre style="background:#1E2229;border:1px solid #374151;padding:0.625rem;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre-wrap;">{ep.request}</pre>
+                  </div>
+                  <div>
+                    <p style="font-size:0.7rem;color:#374151;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Response</p>
+                    <pre style="background:#1E2229;border:1px solid #374151;padding:0.625rem;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:#9CA3AF;overflow-x:auto;margin:0;white-space:pre-wrap;">{ep.response}</pre>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+
   </main>
+
+  <footer style="border-top:2px solid #374151;padding:2rem 1.5rem;">
+    <div style="max-width:72rem;margin:0 auto;display:flex;flex-direction:column;gap:0.75rem;">
+      <p style="font-size:0.875rem;color:#9CA3AF;">
+        Built on open standards for agentic payments from Coinbase and Tempo.
+        Payments settle in USDC on Base or Tempo.
+      </p>
+      <nav style="display:flex;gap:1.25rem;flex-wrap:wrap;">
+        {[
+          ["/llms.txt", "/llms.txt", true],
+          ["/", "Home", false],
+          ["https://x402.org", "x402", true],
+          ["https://mpp.dev", "MPP", true],
+        ].map(([href, label, external]) => (
+          <a
+            href={String(href)}
+            target={external ? "_blank" : undefined}
+            rel={external ? "noopener noreferrer" : undefined}
+            style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#9CA3AF;text-decoration:none;"
+          >
+            {String(label)}
+          </a>
+        ))}
+      </nav>
+    </div>
+  </footer>
+
 </MainLayout>
