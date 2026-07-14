@@ -1,35 +1,43 @@
 // MPP payment middleware — seller-side via mppx.
-// Phase 1: dev-mode pass-through.
-// Phase 2: wire real Mppx.create() + tempo() with verified mppx API.
+// Mppx.create() returns an instance where charge() returns a Hono MiddlewareHandler.
+// We wrap it at the app level by looking up price per request path.
+// Set FORCE_PAYMENT=true to enable in dev/testnet without ENVIRONMENT=production.
 
+import { Mppx } from "mppx/hono";
+import { tempo } from "mppx/server";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "../types";
+import { ROUTE_PRICE_MAP } from "../config/pricing";
 
-export interface MppConfig {
-  env: Env;
-}
+export function createMppMiddleware(env: Env): MiddlewareHandler {
+  const isPaymentEnabled =
+    env.ENVIRONMENT === "production" || process.env.FORCE_PAYMENT === "true";
 
-export function createMppMiddleware(config: MppConfig): MiddlewareHandler {
-  const isDev = config.env.ENVIRONMENT !== "production";
-
-  if (isDev) {
+  if (!isPaymentEnabled) {
     return async (_c, next) => next();
   }
 
-  // Phase 2 implementation:
-  // import { Mppx } from "mppx/hono";  -- or "mppx/proxy", verify at Phase 2
-  // import { tempo } from "mppx/server";
-  // const mppx = Mppx.create({
-  //   methods: [tempo({ currency: config.env.MPP_TEMPO_USDC_ADDRESS, recipient: config.env.EVM_PAYEE_ADDRESS })],
-  //   realm: config.env.BASE_URL,
-  //   secretKey: config.env.MPP_SECRET_KEY,
-  // });
-  // return async (c, next) => {
-  //   const price = ROUTE_PRICE_MAP[c.req.path]?.atomicUsdc ?? "0";
-  //   const result = await mppx.charge({ amount: price })(c.req.raw);
-  //   if (result.status === 402) return result.challenge as Response;
-  //   return next();
-  // };
+  // Mppx.create() returns a wrapped instance where every intent method
+  // (charge, session) returns a Hono MiddlewareHandler ready for app.use().
+  const mppx = Mppx.create({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    methods: [(tempo as any)({
+      currency:  env.MPP_TEMPO_USDC_ADDRESS, // USDC contract on Base
+      recipient: env.EVM_PAYEE_ADDRESS,
+    })],
+    realm:     env.BASE_URL,
+    secretKey: env.MPP_SECRET_KEY,
+  });
 
-  return async (_c, next) => next();
+  // App-level wrapper: look up atomicUsdc amount for the request path,
+  // then delegate to mppx.charge() which returns the per-route MiddlewareHandler.
+  return async (c, next) => {
+    const pricing = ROUTE_PRICE_MAP[c.req.path];
+    if (!pricing) return next(); // path not in price map → pass through
+
+    // mppx.charge() returns a MiddlewareHandler — call it directly
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const chargeHandler = (mppx as any).charge({ amount: pricing.atomicUsdc }) as MiddlewareHandler;
+    return chargeHandler(c, next);
+  };
 }

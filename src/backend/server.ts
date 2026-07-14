@@ -3,7 +3,6 @@ import { cors } from "hono/cors";
 import { loadEnv, type Variables } from "./types";
 import { createX402Middleware } from "./middleware/x402";
 import { createMppMiddleware } from "./middleware/mpp";
-import { ROUTE_PRICE_MAP } from "./config/pricing";
 import trading from "./routes/trading";
 import coding from "./routes/coding";
 import analysis from "./routes/analysis";
@@ -31,14 +30,9 @@ app.get("/health", (c) =>
 );
 
 // Payment middleware — applied to all /v1/* routes
-// Phase 1: pass-through (dev mode). Phase 2: real x402 + MPP.
-app.use("/v1/*", createX402Middleware({
-  env,
-  routePrices: Object.fromEntries(
-    Object.entries(ROUTE_PRICE_MAP).map(([path, p]) => [path, p.atomicUsdc])
-  ),
-}));
-app.use("/v1/*", createMppMiddleware({ env }));
+// Dev mode: pass-through unless FORCE_PAYMENT=true. Production: real x402 + MPP.
+app.use("/v1/*", createX402Middleware(env));
+app.use("/v1/*", createMppMiddleware(env));
 
 // Route bundles
 app.route("/v1/trading/engine", trading);

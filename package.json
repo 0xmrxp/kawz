@@ -7,7 +7,7 @@
     "dev": "bun run --watch src/backend/server.ts",
     "start": "bun run src/backend/server.ts",
     "build:frontend": "cd src/frontend && bun run build",
-    "typecheck": "node_modules/.bin/tsc --noEmit"
+    "typecheck": "node_modules/typescript/bin/tsc --noEmit"
   },
   "dependencies": {
     "@babel/parser": "^7.27.0",
