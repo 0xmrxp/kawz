@@ -1,7 +1,8 @@
-# 🪐 KAWZ — Canonical Architecture Blueprint v2
+# Lobre — Canonical Architecture Blueprint v3
 
-> **Agentic Infrastructure Engine berbasis Hono + Cloudflare Workers, dengan dual-protocol payment (x402 + MPP)**
-> Versi ini adalah revisi penuh dari draft awal, sudah dikoreksi berdasarkan riset terhadap dokumentasi resmi Coinbase CDP, x402 Foundation, MPP (Stripe/Tempo), dan AgentCash.
+> **Agentic Infrastructure Engine berbasis Hono + VPS Linux, dengan dual-protocol payment (x402 + MPP)**
+> Versi ini adalah revisi penuh dari Blueprint v2 (Cloudflare Workers), dimigrasi ke hosting VPS Linux penuh dengan domain `lobre.lat`.
+> Stack: Bun · Hono · Redis · Groq API · Qdrant · Caddy · PM2
 > Desain visual: Neo-Brutalism x Functional Bauhaus — Luxury Slate Palette (`#1E2229`, `#282D37`, gold accent `#D4AF37`)
 
 ---
@@ -21,7 +22,7 @@
 11. [Design System Visual](#11-design-system-visual)
 12. [Estimasi Biaya & Validasi Free Tier](#12-estimasi-biaya--validasi-free-tier)
 13. [Environment Variables & Secrets](#13-environment-variables--secrets)
-14. [Deployment: Cloudflare Workers + Domain](#14-deployment-cloudflare-workers--domain)
+14. [Deployment: VPS Linux + Caddy + PM2](#14-deployment-vps-linux--caddy--pm2)
 15. [Registrasi Discovery (x402scan / mppscan)](#15-registrasi-discovery-x402scan--mppscan)
 16. [Landing Page & Public Docs — Copy Bersih](#16-landing-page--public-docs--copy-bersih)
 17. [Phase Build — Roadmap Berurutan](#17-phase-build--roadmap-berurutan)
@@ -44,21 +45,35 @@
 | `funding-rates` | Diasumsikan dari CoinGecko/DefiLlama (salah kategori) | CCXT `fetchFundingRate()` dari exchange derivatif — funding rate itu konsep CEX/perpetual futures, bukan data DEX spot |
 | Free tier & biaya | Belum divalidasi | Divalidasi langsung ke dokumentasi resmi tiap layanan — lihat §12 |
 | Landing page & docs | Berpotensi bocorkan stack internal | Copy publik dibersihkan total dari detail teknis (lihat §16) |
+| **Hosting** | Cloudflare Workers (edge serverless) | **VPS Linux (self-hosted penuh)** — lebih fleksibel, bisa CCXT tanpa bundle size limit, kontrol penuh atas Redis/Qdrant |
+| **Cache** | Cloudflare KV | **Redis** (self-hosted di VPS) |
+| **AI Inference** | Workers AI | **Groq API** (free tier cepat) + `@xenova/transformers` lokal untuk embedding |
+| **Vector DB** | Cloudflare Vectorize | **Qdrant** (self-hosted Docker, gratis penuh) |
+| **Reverse proxy + TLS** | Cloudflare auto | **Caddy** (auto HTTPS via Let's Encrypt, zero-config) |
+| **Process manager** | wrangler / edge isolate | **PM2** (Node.js/Bun process manager, restart otomatis) |
+| **Nama & domain** | KAWZ / kawz.dev | **Lobre / lobre.lat** |
 
 ---
 
 ## 2. Tech Stack
 
-- **Runtime Framework**: Hono v4 (TypeScript, Web Standard Fetch API)
-- **Hosting/Execution**: Cloudflare Workers (edge global)
-- **Payment — x402**: `x402-hono` (testnet facilitator `x402.org`, produksi CDP Facilitator)
-- **Payment — MPP**: `mppx` (Tempo settlement, Hono middleware resmi)
-- **Data Cache**: Cloudflare KV (buffer data pasar, TTL pendek)
-- **Data CEX**: CCXT (open-source, unified API 100+ exchange, data publik tanpa API key) — **import per-exchange saja** (contoh: `import { binance } from 'ccxt'` — CCXT v4+ mendukung tree-shaking via `"sideEffects": false`), jangan `import ccxt from 'ccxt'` utuh, supaya tidak nabrak limit bundle Workers (1MB Free / 10MB Paid, compressed). **⚠️ Setelah install, cek ukuran bundle dengan `npx wrangler deploy --dry-run` sebelum lanjut — kalau masih melewati limit, alternatifnya fetch data melalui Workers Durable Object terpisah atau gunakan GeckoTerminal API saja untuk pair populer.**
-- **AI Inference**: Cloudflare Workers AI (`@cf/baai/bge-base-en-v1.5` untuk embedding, model LLM untuk ekstraksi entitas & bias detection)
-- **Vector Search**: Cloudflare Vectorize (opsional, untuk context-ranker)
-- **Frontend**: Astro v4 + Tailwind CSS v4 (statis, SEO 100/100)
-- **MCP Server**: `@hono/mcp` + `@modelcontextprotocol/sdk`
+| Layer | Teknologi | Catatan |
+|---|---|---|
+| **Runtime server** | **Bun** (TypeScript-native, Web Standard Fetch API) | Hono punya first-class Bun adapter; lebih cepat dari Node.js untuk I/O-heavy workload |
+| **Framework** | **Hono v4** | Tidak berubah dari v2 — API-compatible, cukup ganti entry point `serve()` |
+| **Hosting** | **VPS Linux** (Ubuntu 22.04 LTS direkomendasikan) | Full self-hosted, tidak ada vendor lock-in Cloudflare |
+| **Reverse proxy + TLS** | **Caddy** | Auto HTTPS via Let's Encrypt, zero-config; lebih simpel dari Nginx + Certbot |
+| **Process manager** | **PM2** | Restart otomatis, cluster mode, log management |
+| **Payment — x402** | `@x402/hono` (testnet: `x402.org`, produksi: CDP Facilitator) | Tidak berubah |
+| **Payment — MPP** | `mppx` / `mppx/hono` (Tempo settlement) | Tidak berubah |
+| **Data Cache** | **Redis** (self-hosted di VPS, `ioredis`) | Menggantikan Cloudflare KV; API hampir identik untuk pola cache-aside |
+| **Data CEX** | **CCXT** (full import, tidak ada bundle size limit di VPS) | Di VPS tidak ada limit 1MB/10MB seperti Workers — `import ccxt from 'ccxt'` aman |
+| **AI Inference — LLM** | **Groq API** (`groq-sdk`, model `llama-3.1-70b-versatile`) | Free tier: 14.400 req/hari, 6.000 tokens/menit — cukup untuk MVP |
+| **AI Inference — Embedding** | **`@xenova/transformers`** (model `BAAI/bge-base-en-v1.5`) | Jalan di CPU lokal, tanpa API key, tanpa biaya eksternal — cocok untuk VPS |
+| **Vector DB** | **Qdrant** (Docker, self-hosted di VPS) | Gratis penuh, gRPC + REST API, high-performance |
+| **Frontend** | **Astro v4 + Tailwind CSS v4** (statis, SEO 100/100) | Build output disajikan sebagai static files via Caddy |
+| **MCP Server** | `@hono/mcp` + `@modelcontextprotocol/sdk` | Tidak berubah |
+| **CI/CD** | **GitHub Actions** → deploy via SSH ke VPS | `appleboy/ssh-action` atau custom rsync + PM2 reload |
 
 ---
 
@@ -69,7 +84,7 @@
 ```text
 Agent (AgentCash / mppx client)
    │
-   ├─ Request tanpa payment proof ──> Kawz Worker
+   ├─ Request tanpa payment proof ──> Lobre server (VPS / Bun + Hono)
    │                                      │
    │                                      ▼
    │                            402 Payment Required
@@ -78,7 +93,7 @@ Agent (AgentCash / mppx client)
    ├─ Agent bayar via x402 (on-chain, per-request)
    │  atau via MPP session (off-chain voucher, batch settle)
    │
-   └─ Retry request + payment proof ──> Kawz verifikasi ──> Data dikembalikan
+   └─ Retry request + payment proof ──> Lobre verifikasi ──> Data dikembalikan
 ```
 
 ### 3.2 Kenapa Dual-Protocol
@@ -125,10 +140,14 @@ Prinsip: harga minimal **5–10x** di atas estimasi biaya facilitator + biaya da
 ## 5. Struktur Folder Monorepo
 
 ```text
-kawz-monorepo/
+lobre-monorepo/
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml                  # CI/CD auto-deploy ke Cloudflare Workers
+│       └── deploy.yml                  # CI/CD: build + SSH deploy ke VPS via appleboy/ssh-action
+├── infra/
+│   ├── Caddyfile                       # Reverse proxy + auto HTTPS (Let's Encrypt) untuk lobre.lat
+│   ├── ecosystem.config.cjs            # PM2 process config (app name, script, env vars)
+│   └── docker-compose.yml             # Qdrant + Redis container di VPS
 ├── public/
 │   ├── favicon.ico
 │   ├── llms.txt                        # Manifest pelengkap untuk crawler AI umum
@@ -137,23 +156,23 @@ kawz-monorepo/
 │       └── JetBrainsMono-Regular.woff2
 ├── src/
 │   ├── backend/
-│   │   ├── types.ts                    # Env interface (KV, AI bindings + secrets) — wajib ada sebelum file lain
+│   │   ├── types.ts                    # Env interface (Redis URL, Groq key, secrets) — wajib ada sebelum file lain
 │   │   ├── config/
 │   │   │   └── pricing.ts              # Single source of truth harga semua endpoint
 │   │   ├── middleware/
 │   │   │   ├── x402.ts                 # Setup @x402/hono per environment
 │   │   │   └── mpp.ts                  # Setup mppx/hono per environment
 │   │   ├── lib/
-│   │   │   ├── cache.ts                # Helper Cloudflare KV cache-aside
-│   │   │   ├── ast-parser.ts           # Parser AST murni-JS untuk Bundle 2
-│   │   │   └── embeddings.ts           # Wrapper Workers AI untuk Bundle 3
+│   │   │   ├── cache.ts                # Helper Redis cache-aside (ioredis)
+│   │   │   ├── ast-parser.ts           # Parser AST untuk Bundle 2
+│   │   │   └── embeddings.ts           # Wrapper @xenova/transformers untuk Bundle 3
 │   │   ├── routes/
 │   │   │   ├── trading.ts              # Bundle 1 (5 endpoints)
 │   │   │   ├── coding.ts               # Bundle 2 (5 endpoints)
 │   │   │   ├── analysis.ts             # Bundle 3 (5 endpoints)
 │   │   │   ├── openapi.ts              # Generator /openapi.json
 │   │   │   └── mcp.ts                  # MCP server route (@hono/mcp)
-│   │   └── server.ts                   # Entry point Hono, basePath('/api')
+│   │   └── server.ts                   # Entry point Hono + Bun.serve(), port 3000
 │   │
 │   ├── frontend/
 │   │   ├── components/
@@ -166,8 +185,8 @@ kawz-monorepo/
 │   │       ├── index.astro
 │   │       └── docs.astro
 ├── package.json
-├── tailwind.config.mjs
-└── wrangler.toml
+├── bunfig.toml                         # Konfigurasi Bun (scripts, workspace)
+└── tailwind.config.mjs
 ```
 
 ---
@@ -218,17 +237,24 @@ export const PRICING: Record<string, EndpointPrice> = {
 ### 6.2 `src/backend/types.ts`
 
 ```typescript
-// Cloudflare Workers Env interface — defines all bindings and secrets available at runtime.
+// VPS environment config — read from process.env at runtime (via dotenv or PM2 env injection).
+// No Cloudflare-specific bindings here: KVNamespace, Ai, etc. diganti dengan string URL/key biasa.
 // Every file that imports `Env` depends on this file; scaffold it first in Phase 1.
 
 export interface Env {
   // Environment
   ENVIRONMENT: "development" | "production";
-  BASE_URL: string;
+  BASE_URL: string;         // e.g. "https://lobre.lat"
+  PORT: string;             // e.g. "3000"
 
-  // Cloudflare bindings
-  KAWZ_VITALS_CACHE: KVNamespace;
-  AI: Ai;
+  // Redis (self-hosted on VPS, managed via docker-compose.yml)
+  REDIS_URL: string;        // e.g. "redis://localhost:6379"
+
+  // Groq API (LLM inference for Bundle 3 — entity extractor, bias detector)
+  GROQ_API_KEY: string;
+
+  // Qdrant (self-hosted on VPS, used by context-ranker endpoint)
+  QDRANT_URL: string;       // e.g. "http://localhost:6333"
 
   // x402 / CDP Facilitator (production only)
   CDP_API_KEY_ID: string;
@@ -240,6 +266,18 @@ export interface Env {
   MPP_FEE_PAYER_KEY?: string;
   MPP_SECRET_KEY: string;
   MPP_TEMPO_USDC_ADDRESS: string;
+}
+
+// Read config from process.env — used in server.ts to build the Env object.
+export function loadEnv(): Env {
+  const required = [
+    "BASE_URL", "REDIS_URL", "GROQ_API_KEY", "QDRANT_URL",
+    "EVM_PAYEE_ADDRESS", "MPP_SECRET_KEY", "MPP_TEMPO_USDC_ADDRESS",
+  ];
+  for (const key of required) {
+    if (!process.env[key]) throw new Error(`Missing required env var: ${key}`);
+  }
+  return process.env as unknown as Env;
 }
 ```
 
@@ -306,29 +344,43 @@ export function createMppxInstance(env: Env) {
 ### 6.5 `src/backend/lib/cache.ts`
 
 ```typescript
-// Cache-aside helper for Cloudflare KV.
-// Used to avoid re-fetching expensive third-party data on every paid request —
-// this is what keeps Bundle 1 (Trading) profitable despite thin per-call margins.
+// Cache-aside helper backed by Redis (ioredis).
+// Drop-in replacement for the former Cloudflare KV helper — same calling convention,
+// but now backed by Redis running locally on the VPS via docker-compose.
+// Keeps Bundle 1 (Trading) profitable by spreading one upstream call across many agent requests.
+
+import Redis from "ioredis";
+
+let _redis: Redis | null = null;
+
+// Lazy singleton — connection is reused across requests in the same Bun process.
+function getRedis(redisUrl: string): Redis {
+  if (!_redis) {
+    _redis = new Redis(redisUrl, { lazyConnect: false, maxRetriesPerRequest: 2 });
+  }
+  return _redis;
+}
 
 export interface CacheOptions {
   ttlSeconds: number;
 }
 
 export async function getOrFetch<T>(
-  kv: KVNamespace,
+  redisUrl: string,
   cacheKey: string,
   fetcher: () => Promise<T>,
   options: CacheOptions
 ): Promise<T> {
-  const cached = await kv.get(cacheKey, "json");
+  const redis = getRedis(redisUrl);
+
+  const cached = await redis.get(cacheKey);
   if (cached !== null) {
-    return cached as T;
+    return JSON.parse(cached) as T;
   }
 
   const fresh = await fetcher();
-  await kv.put(cacheKey, JSON.stringify(fresh), {
-    expirationTtl: options.ttlSeconds,
-  });
+  // EX sets TTL in seconds — identical semantics to KV expirationTtl.
+  await redis.set(cacheKey, JSON.stringify(fresh), "EX", options.ttlSeconds);
 
   return fresh;
 }
@@ -355,7 +407,7 @@ const trading = new Hono<{ Bindings: Env }>();
 // By the time a handler runs, payment has been verified — no per-handler payment check needed.
 trading.get("/vitals", async (c) => {
   const vitals = await getOrFetch(
-    c.env.KAWZ_VITALS_CACHE,
+    c.env.REDIS_URL,
     "trading:vitals",
     fetchMarketVitals,
     { ttlSeconds: 10 }
@@ -381,7 +433,7 @@ trading.get("/funding-rates", async (c) => {
   // they do not exist on DEX spot markets, so CCXT against a derivatives
   // exchange is the correct source here, not a DEX aggregator.
   const rates = await getOrFetch(
-    c.env.KAWZ_VITALS_CACHE,
+    c.env.REDIS_URL,
     "trading:funding-rates",
     fetchFundingRates,
     { ttlSeconds: 15 }
@@ -390,8 +442,8 @@ trading.get("/funding-rates", async (c) => {
 });
 
 async function fetchFundingRates() {
-  // Tree-shake via named import — CCXT v4+ supports sideEffects:false.
-  // Run `npx wrangler deploy --dry-run` to verify bundle stays under Workers size limit.
+  // On VPS there is no 1MB bundle size limit — full CCXT import is fine.
+  // Named import still preferred for clarity and faster startup.
   const { binance: BinanceClass } = await import("ccxt");
   const exchange = new BinanceClass();
 
@@ -410,13 +462,12 @@ export default trading;
 ### 6.7 `src/backend/server.ts`
 
 ```typescript
-// Kawz main entry point.
-// Mounts all three bundles plus discovery (/openapi.json, /llms.txt) and MCP (/mcp).
+// Lobre main entry point — Bun standalone server (not a Cloudflare Workers module export).
+// `Bun.serve()` replaces `export default app` — this is the key difference from the Workers version.
 // Payment middleware (x402 + MPP) is registered HERE at the app level — NOT in route handlers.
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { paymentMiddleware } from "@x402/hono";
 import { createX402Middleware } from "./middleware/x402";
 import { createMppxInstance } from "./middleware/mpp";
 import trading from "./routes/trading";
@@ -425,9 +476,18 @@ import analysis from "./routes/analysis";
 import openapi from "./routes/openapi";
 import mcp from "./routes/mcp";
 import { PRICING } from "./config/pricing";
-import type { Env } from "./types";
+import { loadEnv, type Env } from "./types";
 
-const app = new Hono<{ Bindings: Env }>().basePath("/api");
+// Load and validate all env vars once at startup — fails fast if anything is missing.
+const env = loadEnv();
+
+// On VPS, Hono uses Variables (not Bindings) to pass runtime config through context.
+// `c.get("env")` in any route handler returns the fully typed Env object.
+type Variables = { env: Env };
+const app = new Hono<{ Variables: Variables }>().basePath("/api");
+
+// Inject env into every request context.
+app.use("*", (c, next) => { c.set("env", env); return next(); });
 
 // CORS is intentionally permissive on payment-gated routes:
 // the caller is authenticated by payment proof, not by origin.
@@ -441,32 +501,28 @@ app.use("*", cors({
 // Payment middleware registered once at app level for all paid routes.
 // Routes under /v1/* require payment; /openapi.json and /mcp are exempt.
 app.use("/v1/*", async (c, next) => {
-  const { facilitatorClient, ExactEvmScheme } = createX402Middleware(c.env);
-  const mppx = createMppxInstance(c.env);
+  const e = c.get("env");
+  const mppx = createMppxInstance(e);
 
-  // Build the price map for x402 from our central pricing config.
   const priceMap: Record<string, string> = {
-    "/api/v1/trading/engine/vitals":         PRICING["trading.vitals"].atomicUsdc,
-    "/api/v1/trading/engine/orderbook-depth": PRICING["trading.orderbookDepth"].atomicUsdc,
-    "/api/v1/trading/engine/mev-risk-index":  PRICING["trading.mevRiskIndex"].atomicUsdc,
-    "/api/v1/trading/engine/funding-rates":   PRICING["trading.fundingRates"].atomicUsdc,
-    "/api/v1/trading/engine/whale-tracker":   PRICING["trading.whaleTracker"].atomicUsdc,
-    "/api/v1/coding/cache/dependency-tree":   PRICING["coding.dependencyTree"].atomicUsdc,
-    "/api/v1/coding/cache/token-compressor":  PRICING["coding.tokenCompressor"].atomicUsdc,
-    "/api/v1/coding/cache/syntax-heartbeat":  PRICING["coding.syntaxHeartbeat"].atomicUsdc,
-    "/api/v1/coding/cache/refactor-suggest":  PRICING["coding.refactorSuggest"].atomicUsdc,
-    "/api/v1/coding/cache/security-audit":    PRICING["coding.securityAudit"].atomicUsdc,
-    "/api/v1/analysis/memory/heartbeat":      PRICING["analysis.heartbeat"].atomicUsdc,
+    "/api/v1/trading/engine/vitals":            PRICING["trading.vitals"].atomicUsdc,
+    "/api/v1/trading/engine/orderbook-depth":   PRICING["trading.orderbookDepth"].atomicUsdc,
+    "/api/v1/trading/engine/mev-risk-index":    PRICING["trading.mevRiskIndex"].atomicUsdc,
+    "/api/v1/trading/engine/funding-rates":     PRICING["trading.fundingRates"].atomicUsdc,
+    "/api/v1/trading/engine/whale-tracker":     PRICING["trading.whaleTracker"].atomicUsdc,
+    "/api/v1/coding/cache/dependency-tree":     PRICING["coding.dependencyTree"].atomicUsdc,
+    "/api/v1/coding/cache/token-compressor":    PRICING["coding.tokenCompressor"].atomicUsdc,
+    "/api/v1/coding/cache/syntax-heartbeat":    PRICING["coding.syntaxHeartbeat"].atomicUsdc,
+    "/api/v1/coding/cache/refactor-suggest":    PRICING["coding.refactorSuggest"].atomicUsdc,
+    "/api/v1/coding/cache/security-audit":      PRICING["coding.securityAudit"].atomicUsdc,
+    "/api/v1/analysis/memory/heartbeat":        PRICING["analysis.heartbeat"].atomicUsdc,
     "/api/v1/analysis/memory/entity-extractor": PRICING["analysis.entityExtractor"].atomicUsdc,
-    "/api/v1/analysis/memory/context-ranker": PRICING["analysis.contextRanker"].atomicUsdc,
-    "/api/v1/analysis/memory/bias-detector":  PRICING["analysis.biasDetector"].atomicUsdc,
-    "/api/v1/analysis/memory/fact-linkage":   PRICING["analysis.factLinkage"].atomicUsdc,
+    "/api/v1/analysis/memory/context-ranker":   PRICING["analysis.contextRanker"].atomicUsdc,
+    "/api/v1/analysis/memory/bias-detector":    PRICING["analysis.biasDetector"].atomicUsdc,
+    "/api/v1/analysis/memory/fact-linkage":     PRICING["analysis.factLinkage"].atomicUsdc,
   };
 
-  // mppx handles MPP payments and falls through for x402 clients.
-  // paymentMiddleware handles the x402 verification layer.
-  const mppHandler = mppx.charge({ amount: priceMap[c.req.path] ?? "0" });
-  const mppResult = await mppHandler(c.req.raw);
+  const mppResult = await mppx.charge({ amount: priceMap[c.req.path] ?? "0" })(c.req.raw);
   if (mppResult.status === 402) return mppResult.challenge as Response;
 
   return next();
@@ -475,10 +531,14 @@ app.use("/v1/*", async (c, next) => {
 app.route("/v1/trading/engine", trading);
 app.route("/v1/coding/cache", coding);
 app.route("/v1/analysis/memory", analysis);
-app.route("/", openapi); // serves GET /api/openapi.json — no payment required
-app.route("/mcp", mcp);  // serves ALL /api/mcp — MCP tools handle their own payment context
+app.route("/", openapi);
+app.route("/mcp", mcp);
 
-export default app;
+// Bun.serve() — this replaces `export default app` from the Cloudflare Workers version.
+// Port is read from env; Caddy reverse proxies lobre.lat → localhost:3000.
+const port = parseInt(env.PORT ?? "3000");
+console.log(`Lobre server running on port ${port}`);
+Bun.serve({ port, fetch: app.fetch });
 ```
 
 ---
@@ -497,7 +557,7 @@ export default app;
 | `whale-tracker` | **Basescan/Etherscan API** (free tier: 5 calls/detik, 100.000/hari) — pantau event `Transfer` di atas threshold tertentu. Alternatif open-source: **Blockscout** (self-hostable, gratis penuh, dipakai OP Stack chains) | KV 30-60 detik |
 | `mev-risk-index` | Heuristik dari trace transaksi publik (Blockscout/Basescan) — pola sandwich attack dideteksi dari urutan transaksi di block yang sama, bukan berlangganan layanan MEV-protection berbayar | KV 30-60 detik |
 
-**Catatan implementasi CCXT**: data publik (ticker, orderbook, funding rate) **tidak butuh API key** — cocok karena Kawz cuma baca data untuk dijual ulang, bukan eksekusi trading. Import exchange satu-satu (`ccxt/js/src/binance.js`), bukan seluruh library, supaya bundle Worker tetap ramping.
+**Catatan implementasi CCXT di VPS**: tidak ada bundle size limit di VPS seperti di Cloudflare Workers — `import ccxt from 'ccxt'` atau named import per-exchange sama-sama aman. Data publik (ticker, orderbook, funding rate) **tidak butuh API key**. Import named per-exchange tetap disarankan untuk startup time lebih cepat (`import { binance } from 'ccxt'`).
 
 **Kunci margin**: karena harga sumber data biasanya per-panggilan atau berbasis kuota, KV cache membuat satu panggilan upstream bisa dijual berkali-kali ke agent berbeda dalam window TTL yang sama.
 
@@ -511,10 +571,12 @@ Tidak butuh API eksternal sama sekali:
 
 ### 7.3 Bundle 3 — Live Vector Pruner / Analysis
 
-- `heartbeat` (cosine similarity) → `env.AI.run("@cf/baai/bge-base-en-v1.5", ...)` generate embedding, hitung cosine similarity manual di Worker.
-- `entity-extractor`, `bias-detector` → Workers AI LLM (Llama/Qwen) dengan output JSON terstruktur.
-- `context-ranker` → kombinasi bge embedding + Cloudflare Vectorize (**ada free tier**: 30M queried dimensions + 5M stored dimensions/bulan) untuk re-ranking cepat.
-- `fact-linkage` → **Google Fact Check Tools API** (gratis, cukup API key Google Cloud, akses database ClaimReview global) sebagai sumber utama. Keterbatasan: hanya menemukan klaim yang **sudah pernah** di-fact-check manusia — untuk klaim baru, fallback ke Workers AI LLM + grounding search. Tetap endpoint termahal untuk diproses, karenanya diberi harga tertinggi ($0.012).
+- `heartbeat` (cosine similarity) → **`@xenova/transformers`** jalan lokal di VPS: load model `BAAI/bge-base-en-v1.5` sekali saat startup (model ~400MB, cached di disk), generate embedding di CPU, hitung cosine similarity manual. Tanpa API key, tanpa biaya eksternal, latensi ~50-150ms di CPU VPS standar.
+- `entity-extractor`, `bias-detector` → **Groq API** (`groq-sdk`, model `llama-3.1-70b-versatile`): output JSON terstruktur via `response_format: { type: "json_object" }`. Free tier: 14.400 req/hari, 6.000 tokens/menit — cukup untuk MVP.
+- `context-ranker` → kombinasi bge embedding (`@xenova/transformers`) + **Qdrant** (self-hosted Docker di VPS, REST API port 6333). Qdrant gratis penuh, tidak ada kuota.
+- `fact-linkage` → **Google Fact Check Tools API** (gratis, API key Google Cloud, database ClaimReview global) sebagai sumber utama. Keterbatasan: hanya klaim yang **sudah pernah** di-fact-check manusia — untuk klaim baru, fallback ke Groq LLM + grounding search. Tetap endpoint termahal ($0.012) karena gabungan external API call + LLM inference.
+
+**Catatan startup `@xenova/transformers`**: model di-download otomatis pertama kali (`~/.cache/huggingface/hub/`). Gunakan `await pipeline('feature-extraction', 'Xenova/bge-base-en-v1.5')` dan cache instance pipeline di module scope — jangan inisialisasi ulang per request.
 
 ---
 
@@ -536,7 +598,7 @@ import type { Env } from "../types";
 const mcp = new Hono<{ Bindings: Env }>();
 
 function buildMcpServer(): McpServer {
-  const server = new McpServer({ name: "kawz", version: "1.0.0" });
+  const server = new McpServer({ name: "lobre", version: "1.0.0" });
 
   // Register each bundle's endpoints as individual MCP tools here.
   // Mirror the same business logic as the REST handlers — share helper functions, not handlers.
@@ -577,11 +639,11 @@ openapi.get("/openapi.json", (c) => {
   return c.json({
     openapi: "3.1.0",
     info: {
-      title: "Kawz Agentic Infrastructure Engine",
+      title: "Lobre Agentic Infrastructure Engine",
       version: "1.0.0",
       description: "Pay-per-request utility infrastructure for autonomous AI agents.",
       "x-guidance": "Use GET /api/v1/trading/engine/vitals for market vitals. Use POST /api/v1/coding/cache/token-compressor with { raw_code } to compress source code. Use POST /api/v1/analysis/memory/entity-extractor with { unstructured_text } to extract structured entities.",
-      contact: { email: "team@kawz.dev" },
+      contact: { email: "team@lobre.lat" },
     },
     paths: {
       "/api/v1/trading/engine/vitals": {
@@ -654,40 +716,63 @@ registerExtension(bazaarResourceServerExtension);
 
 Semua angka di bawah sudah divalidasi langsung ke dokumentasi resmi masing-masing layanan (bukan asumsi) sebelum dimasukkan ke blueprint ini.
 
-### 12.1 Terkonfirmasi Valid
+### 12.1 Infrastruktur VPS
+
+| Komponen | Biaya | Catatan |
+|---|---|---|
+| **VPS Linux** (misal: DigitalOcean/Vultr/Hetzner/Contabo) | **$5–$6/bulan** (1 vCPU, 1–2 GB RAM, 25 GB SSD) | Hetzner paling murah (~€3.5/bulan). Cukup untuk MVP. Naik ke $12/bulan (2 vCPU, 4 GB RAM) kalau Redis + Qdrant + Bun butuh lebih room. |
+| **Domain `lobre.lat`** | **~$3–$5/tahun** | `.lat` TLD harga murah, beli di Namecheap/Cloudflare Registrar |
+| **TLS/HTTPS** | **Gratis** | Caddy auto-renew via Let's Encrypt |
+| **Redis** (self-hosted di VPS) | **Gratis** | Jalan di Docker, tidak ada kuota tulis/baca seperti KV |
+| **Qdrant** (self-hosted di VPS) | **Gratis** | Docker, REST API, tidak ada kuota dimensions |
+| **`@xenova/transformers` embedding** | **Gratis** | Jalan lokal di CPU, model ~400MB, cache di disk |
+
+### 12.2 Layanan Eksternal (Gratis / Berbiaya)
 
 | Layanan | Free Tier | Catatan |
 |---|---|---|
-| Cloudflare Workers | 100.000 request/hari, 10ms CPU time/invocation | Cukup untuk MVP; produksi ramai butuh Paid plan ($5/bulan) |
-| Workers KV | 1GB storage, 100K read/hari, **1K write/hari** | Limit write paling gampang kena kalau cache TTL pendek + traffic ramai |
-| Workers AI | **10.000 Neuron/hari gratis**, reset 00:00 UTC, lalu $0.011/1.000 Neuron | Berlaku di Free maupun Paid plan |
-| Cloudflare Vectorize | 30M queried dimensions + 5M stored dimensions/bulan | Free tier resmi ada — sumber lama yang bilang "tidak ada free tier" sudah usang |
+| **Groq API** (LLM inference) | **14.400 req/hari, 6.000 tokens/menit** | Cukup untuk MVP; upgrade ke Dev ($0.05/1M token) kalau traffic naik |
 | CDP Facilitator (x402) | 1.000 transaksi gratis/bulan, lalu $0.001/transaksi | Berlaku resmi sejak 1 Jan 2026 |
 | CoinGecko API | Demo plan: 100 calls/menit, 10.000 calls/bulan | Upgrade $35/bulan kalau traffic ramai |
-| GeckoTerminal API | Gratis, 10 calls/menit | Dari tim CoinGecko, cakupan 1.900+ DEX |
+| GeckoTerminal API | Gratis, 10 calls/menit | Dari tim CoinGecko, 1.900+ DEX |
 | Basescan/Etherscan API | 5 calls/detik, 100.000 calls/hari | Gratis, cukup untuk whale-tracker |
-| CCXT (data publik CEX) | Gratis, tanpa API key, tanpa limit dari CCXT sendiri | Limit datang dari rate limit masing-masing exchange, ditangani otomatis oleh CCXT |
-| Google Fact Check Tools API | Gratis (API key Google Cloud) | Hanya cakup klaim yang sudah pernah di-fact-check manusia |
+| CCXT (data publik CEX) | Gratis, tanpa API key | Limit dari rate limit exchange masing-masing |
+| Google Fact Check Tools API | Gratis (API key Google Cloud) | Hanya klaim yang sudah di-fact-check manusia |
 
-### 12.2 Tidak Ada Free Tier Berarti (Butuh Budget)
+### 12.3 Tidak Dipakai (Biaya Tidak Sepadan)
 
 | Layanan | Status |
 |---|---|
-| Dune Analytics API | Praktis tidak ada free tier layak untuk pemakaian produksi — **diganti** dengan Basescan/Blockscout di §7.1 |
-| 1inch API tingkat lanjut | Free tier terbatas, tren makin mengunci — **diganti** dengan GeckoTerminal + CCXT |
-| Domain `kawz.dev` | Biaya tahunan wajib (Cloudflare Registrar harga wholesale) |
+| Dune Analytics API | Tidak ada free tier layak — **diganti** Basescan/Blockscout |
+| 1inch API tingkat lanjut | Free tier makin terbatas — **diganti** GeckoTerminal + CCXT |
+| Domain `lobre.lat` | Biaya tahunan wajib (~$3–5/tahun, beli di Namecheap/Cloudflare Registrar) |
 
-### 12.3 Kesimpulan
+### 12.4 Kesimpulan Biaya VPS
 
-Fase **development/MVP** (Phase 0-8 di §17) bisa jalan nyaris gratis total. Baru pas migrasi produksi serius (Phase 9-10), siapkan budget kecil bulanan: Cloudflare Paid ($5) + kemungkinan upgrade CoinGecko ($35) kalau traffic Bundle 1 ramai. Biaya CDP Facilitator ($0.001/tx di atas 1.000/bulan) sudah diperhitungkan di skema harga §4.
+Fase **development/MVP** (Phase 0-8): bisa jalan hampir gratis — VPS $5/bulan + domain $5/tahun saja. Produksi serius (Phase 9-10): VPS bisa naik ke $12/bulan kalau butuh lebih resource, tambah upgrade CoinGecko ($35/bulan) kalau traffic Bundle 1 tinggi. Biaya CDP Facilitator ($0.001/tx di atas 1.000/bulan) dan Groq sudah diperhitungkan di skema harga §4.
+
+**Total estimasi MVP**: ~$5–$7/bulan all-in (VPS + domain prorated).
 
 ---
 
 ## 13. Environment Variables & Secrets
 
+File `.env` di root repo (jangan pernah commit ke git — masuk `.gitignore`):
+
 ```text
+# App
 ENVIRONMENT=production
-BASE_URL=https://kawz.dev
+BASE_URL=https://lobre.lat
+PORT=3000
+
+# Redis (self-hosted via docker-compose di VPS)
+REDIS_URL=redis://localhost:6379
+
+# Groq API (LLM inference untuk Bundle 3)
+GROQ_API_KEY=                  # dari console.groq.com
+
+# Qdrant (self-hosted via docker-compose di VPS)
+QDRANT_URL=http://localhost:6333
 
 # x402 / CDP Facilitator
 CDP_API_KEY_ID=
@@ -696,33 +781,170 @@ CDP_API_KEY_SECRET=
 # MPP / Tempo
 EVM_PAYEE_ADDRESS=
 MPP_OPERATOR_KEY=
-MPP_FEE_PAYER_KEY=          # optional — omit to let agents pay their own gas
-MPP_SECRET_KEY=             # openssl rand -hex 32, never rotate after go-live
-MPP_TEMPO_USDC_ADDRESS=     # verify against current mpp.dev docs before deploy
-
-# Cloudflare bindings
-KAWZ_VITALS_CACHE=          # KV namespace binding
-AI=                         # Workers AI binding
+MPP_FEE_PAYER_KEY=             # optional — omit to let agents pay their own gas
+MPP_SECRET_KEY=                # openssl rand -hex 32, never rotate after go-live
+MPP_TEMPO_USDC_ADDRESS=        # verify against current mpp.dev docs before deploy
 ```
 
-Semua secret **wajib** disetel via `wrangler secret put`, bukan `[vars]` biasa di `wrangler.toml` — jangan pernah commit private key ke repo.
+Pada VPS, inject via PM2 `ecosystem.config.cjs` (field `env`) atau dengan `dotenv` di entry point. Jangan pernah commit private key atau API key ke repo — gunakan GitHub Actions Secrets untuk CI/CD.
 
 ---
 
-## 14. Deployment: Cloudflare Workers + Domain
+## 14. Deployment: VPS Linux + Caddy + PM2
 
-1. Beli/pindahkan domain `kawz.dev` ke Cloudflare Registrar (atau cukup arahkan nameserver ke Cloudflare kalau domain sudah dimiliki di registrar lain).
-2. `wrangler.toml` — pastikan `[[routes]]` mengarah ke `kawz.dev/*` dengan `zone_name = "kawz.dev"`.
-3. Deploy: `npx wrangler deploy`.
-4. Verifikasi TLS otomatis aktif (Cloudflare mengelola sertifikat secara default).
+### 14.1 Provisioning VPS
+
+```bash
+# Di mesin lokal — SSH ke VPS baru (Ubuntu 22.04 LTS)
+ssh root@<VPS_IP>
+
+# Install Bun
+curl -fsSL https://bun.sh/install | bash
+source ~/.bashrc
+
+# Install Docker + Docker Compose (untuk Redis + Qdrant)
+apt-get update && apt-get install -y docker.io docker-compose-plugin
+systemctl enable --now docker
+
+# Install Caddy
+apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+apt-get update && apt-get install caddy
+
+# Install PM2
+bun install -g pm2
+```
+
+### 14.2 Redis + Qdrant via Docker Compose
+
+File `infra/docker-compose.yml`:
+
+```yaml
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"  # bind localhost only, not exposed externally
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  qdrant_data:
+```
+
+```bash
+# Di VPS, jalankan containers
+cd /opt/lobre
+docker compose -f infra/docker-compose.yml up -d
+```
+
+### 14.3 Caddy (Reverse Proxy + Auto HTTPS)
+
+File `infra/Caddyfile`:
+
+```
+lobre.lat {
+  reverse_proxy localhost:3000
+}
+
+www.lobre.lat {
+  redir https://lobre.lat{uri} permanent
+}
+```
+
+```bash
+# Copy Caddyfile ke lokasi resmi Caddy
+cp infra/Caddyfile /etc/caddy/Caddyfile
+systemctl reload caddy
+# Caddy otomatis request + renew sertifikat Let's Encrypt
+```
+
+### 14.4 PM2 Process Manager
+
+File `infra/ecosystem.config.cjs`:
+
+```javascript
+module.exports = {
+  apps: [{
+    name: "lobre",
+    script: "src/backend/server.ts",
+    interpreter: "bun",
+    interpreter_args: "run",
+    env: {
+      NODE_ENV: "production",
+      // Inject non-secret vars here; secrets via .env file at deploy time
+    },
+    restart_delay: 3000,
+    max_restarts: 10,
+    log_file: "/var/log/lobre/app.log",
+    error_file: "/var/log/lobre/error.log",
+  }]
+};
+```
+
+```bash
+# Start / reload app
+pm2 start infra/ecosystem.config.cjs
+pm2 save          # persist across reboots
+pm2 startup       # generate systemd unit for PM2 itself
+```
+
+### 14.5 CI/CD via GitHub Actions (SSH Deploy)
+
+File `.github/workflows/deploy.yml`:
+
+```yaml
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/lobre
+            git pull origin main
+            bun install --frozen-lockfile
+            pm2 reload lobre --update-env
+```
+
+GitHub Secrets yang perlu diset: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
+
+### 14.6 DNS Setup
+
+Di registrar domain `lobre.lat`: tambahkan A record:
+```
+lobre.lat     A    <VPS_IP>
+www.lobre.lat A    <VPS_IP>
+```
+TTL 300 detik cukup. Caddy akan request sertifikat Let's Encrypt otomatis setelah DNS propagasi (~5 menit).
 
 ---
 
 ## 15. Registrasi Discovery (x402scan / mppscan)
 
 ```bash
-npx -y @agentcash/discovery@latest discover "https://kawz.dev"
-npx -y @agentcash/discovery@latest check "https://kawz.dev"
+npx -y @agentcash/discovery@latest discover "https://lobre.lat"
+npx -y @agentcash/discovery@latest check "https://lobre.lat"
 ```
 
 Setelah lolos validasi tanpa error blocking, daftarkan origin ke:
@@ -733,7 +955,7 @@ Setelah lolos validasi tanpa error blocking, daftarkan origin ke:
 
 ## 16. Landing Page & Public Docs — Copy Bersih
 
-> **Prinsip utama**: landing page dan halaman docs publik **tidak boleh menyebut stack internal sama sekali** — tidak ada "Hono", "Cloudflare Workers", "KV", "x402-hono", "mppx", "CCXT", "GeckoTerminal", dst. Yang publik lihat cuma: apa yang Kawz lakukan, berapa harganya, dan cara pakainya. Detail implementasi itu urusan §1-15 di dokumen ini, bukan konsumsi publik.
+> **Prinsip utama**: landing page dan halaman docs publik **tidak boleh menyebut stack internal sama sekali** — tidak ada "Hono", "Bun", "Redis", "Qdrant", "VPS", "x402-hono", "mppx", "CCXT", "GeckoTerminal", dst. Yang publik lihat cuma: apa yang Lobre lakukan, berapa harganya, dan cara pakainya. Detail implementasi itu urusan §1-15 di dokumen ini, bukan konsumsi publik.
 
 ### 16.1 Referensi Gaya: stableenrich.dev
 
@@ -743,7 +965,7 @@ Struktur dan nada dari `stableenrich.dev` dipakai sebagai acuan karena sudah ter
 - Kotak onboarding CLI 3 langkah (`onboard` → `try` → `add`) — bukan tutorial API key/OAuth.
 - Kartu harga dikelompokkan per **kategori kegunaan**, bukan daftar mentah 15 endpoint.
 - Tabel perbandingan "cara lama vs cara agentic" untuk mendidik pengunjung yang belum familiar dengan x402/MPP.
-- Footer menyebut protokol terbuka (x402, MPP) dan jaringan settlement (Base/Solana/Tempo) — ini boleh disebut karena itu standar terbuka publik, bukan implementasi internal Kawz.
+- Footer menyebut protokol terbuka (x402, MPP) dan jaringan settlement (Base/Solana/Tempo) — ini boleh disebut karena itu standar terbuka publik, bukan implementasi internal Lobre.
 - **Tidak ada** satu pun penyebutan framework, database, atau layanan cloud yang dipakai di baliknya.
 
 ### 16.2 Draft Copy Hero (`index.astro`)
@@ -752,14 +974,14 @@ Struktur dan nada dari `stableenrich.dev` dipakai sebagai acuan karena sudah ter
 Tagline: "Infrastructure agents can keep reaching for."
 Subhead: "Your agent explores. You pay pennies."
 
-Body: Kawz unifies 15 utility endpoints across trading, coding,
+Body: Lobre unifies 15 utility endpoints across trading, coding,
 and research behind one stateless interface. No sign-ups.
 No credential overhead. Real-time settlement.
 
 CLI Onboarding Box:
   Step 1: npx agentcash onboard
-  Step 2: npx agentcash try https://kawz.dev
-  Step 3: npx agentcash add https://kawz.dev
+  Step 2: npx agentcash try https://lobre.lat
+  Step 3: npx agentcash add https://lobre.lat
 ```
 
 ### 16.3 Kartu Harga per Kategori (bukan per-endpoint mentah)
@@ -811,74 +1033,77 @@ Payments settle in USDC on Base, Solana, or Tempo.
 
 ## 17. Phase Build — Roadmap Berurutan
 
-### **Phase 0 — Persiapan & Kredensial** *(sebelum menulis kode apa pun)*
+### **Phase 0 — Persiapan & Infrastruktur** *(sebelum menulis kode apa pun)*
+- [ ] Sewa VPS Linux (Ubuntu 22.04 LTS, min. 1 vCPU / 2 GB RAM) — Hetzner/DigitalOcean/Vultr.
+- [ ] Beli domain `lobre.lat` (Namecheap/Cloudflare Registrar), arahkan A record ke IP VPS.
+- [ ] SSH ke VPS, install Bun + Docker + Caddy + PM2 sesuai langkah §14.1.
+- [ ] Jalankan `docker compose up -d` (Redis + Qdrant) dari `infra/docker-compose.yml`.
 - [ ] Generate wallet operator EVM (`EVM_PAYEE_ADDRESS`) dan fee-payer (opsional).
-- [ ] Daftar CDP API Key (`CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`) di `portal.cdp.coinbase.com`.
+- [ ] Daftar CDP API Key di `portal.cdp.coinbase.com`, daftar Groq API key di `console.groq.com`.
 - [ ] Generate `MPP_SECRET_KEY` via `openssl rand -hex 32`, simpan aman.
 - [ ] Verifikasi alamat kontrak Tempo USDC terbaru di `mpp.dev/docs`.
-- [ ] Beli/arahkan domain `kawz.dev` ke Cloudflare.
-- [ ] Buat akun Cloudflare Workers + KV namespace kosong.
+- [ ] Buat file `.env` di VPS (`/opt/lobre/.env`) sesuai §13 — jangan commit ke repo.
 
 ### **Phase 1 — Skeleton Proyek**
 - [ ] Scaffold monorepo sesuai struktur folder di §5.
-- [ ] `npm init` + install dependency inti: `hono`, `@x402/hono`, `mppx`, `@hono/mcp`, `@modelcontextprotocol/sdk`.
-- [ ] **Buat `src/backend/types.ts` terlebih dahulu** (lihat §6.2) — file ini jadi prerequisite semua file backend lain.
-- [ ] Setup `wrangler.toml` dasar (tanpa domain custom dulu — pakai `*.workers.dev` untuk testing).
-- [ ] Deploy "Hello World" Hono ke Workers untuk validasi pipeline CI/CD dasar.
+- [ ] `bun init` + install dependency inti: `hono`, `@x402/hono`, `mppx`, `@hono/mcp`, `@modelcontextprotocol/sdk`, `ioredis`.
+- [ ] **Buat `src/backend/types.ts` terlebih dahulu** (lihat §6.2) — prerequisite semua file backend lain.
+- [ ] Setup `infra/Caddyfile`, `infra/docker-compose.yml`, `infra/ecosystem.config.cjs` sesuai §14.
+- [ ] Deploy "Hello World" Hono via `bun run src/backend/server.ts` + PM2 ke VPS, verifikasi `https://lobre.lat` dapat diakses dengan HTTPS.
 
 ### **Phase 2 — Payment Layer (Testnet)**
 - [ ] Implementasi `middleware/x402.ts` dengan facilitator `x402.org` (testnet).
 - [ ] Implementasi `middleware/mpp.ts` dengan `mppx/hono`.
-- [ ] Bangun **satu** endpoint contoh (`trading/vitals`) dengan payment gate ganda (x402 + MPP).
+- [ ] Bangun **satu** endpoint contoh (`trading/vitals`) dengan payment gate ganda (x402 + MPP) — middleware di level app, bukan handler.
 - [ ] Uji manual pakai `mppx` CLI dan `agentcash fetch` dari sisi klien untuk memastikan 402 challenge dan settlement jalan.
 
 ### **Phase 3 — Bundle 1: Trading Engine**
-- [ ] Implementasi `vitals` & `orderbook-depth` dengan sumber hybrid CEX (CCXT, import per-exchange) + DEX (GeckoTerminal).
-- [ ] Implementasi `funding-rates` khusus dari CCXT exchange derivatif (Binance Futures/Bybit/OKX) — **jangan** pakai sumber DEX untuk ini.
+- [ ] Implementasi `vitals` & `orderbook-depth` dengan sumber hybrid CEX (CCXT) + DEX (GeckoTerminal).
+- [ ] Implementasi `funding-rates` dari CCXT exchange derivatif (Binance Futures/Bybit/OKX) — **jangan** pakai sumber DEX.
 - [ ] Implementasi `whale-tracker` & `mev-risk-index` dari Basescan/Blockscout.
-- [ ] Bangun `lib/cache.ts` dan pasang KV cache-aside di setiap endpoint.
-- [ ] Tuning TTL cache per endpoint berdasarkan volatilitas data.
-- [ ] Cek ukuran bundle Worker setelah tambah CCXT (`wrangler deploy --dry-run`) — pastikan tidak nabrak limit 1MB/10MB.
+- [ ] Bangun `lib/cache.ts` (Redis via ioredis) dan pasang di setiap endpoint.
+- [ ] Tuning TTL Redis per endpoint berdasarkan volatilitas data.
 
 ### **Phase 4 — Bundle 2: Coding Cache**
-- [ ] Implementasi parser AST ringan (`@babel/parser`/`es-module-lexer`) untuk `dependency-tree` dan `syntax-heartbeat`.
-- [ ] Perbaiki & implementasi regex compressor untuk `token-compressor`.
-- [ ] Implementasi `refactor-suggest` dan `security-audit` (Workers AI atau database pattern statis).
+- [ ] Implementasi parser AST (`@babel/parser`/`es-module-lexer`) untuk `dependency-tree` dan `syntax-heartbeat`.
+- [ ] Implementasi regex compressor untuk `token-compressor`.
+- [ ] Implementasi `refactor-suggest` dan `security-audit` (Groq API atau database pattern statis).
 
 ### **Phase 5 — Bundle 3: Analysis / Vector Pruner**
-- [ ] Setup Workers AI binding, implementasi `heartbeat` (embedding + cosine similarity).
-- [ ] Implementasi `entity-extractor` dan `bias-detector` via LLM inference terstruktur.
-- [ ] Setup Cloudflare Vectorize untuk `context-ranker`.
-- [ ] Implementasi `fact-linkage` dengan sumber eksternal (search/fact-check API).
+- [ ] Setup `@xenova/transformers`, implementasi `heartbeat` (embedding CPU lokal + cosine similarity).
+- [ ] Implementasi `entity-extractor` dan `bias-detector` via Groq API (`llama-3.1-70b-versatile`, JSON output).
+- [ ] Setup Qdrant collection, implementasi `context-ranker` (bge embedding + Qdrant search).
+- [ ] Implementasi `fact-linkage` (Google Fact Check Tools API + Groq fallback).
 
 ### **Phase 6 — Discovery & Bazaar**
 - [ ] Bangun route `/openapi.json` lengkap 15 endpoint dengan `x-payment-info` valid.
 - [ ] Tulis `public/llms.txt` final.
-- [ ] Pasang Bazaar extension (`@x402/extensions/bazaar`) di setiap route.
+- [ ] Cek `@x402/extensions/bazaar` di npm — kalau sudah tersedia, pasang; kalau belum, lewati (lihat §10).
 - [ ] Jalankan `@agentcash/discovery discover` dan `check`, perbaiki semua warning.
 
 ### **Phase 7 — MCP Server**
-- [ ] Implementasi `routes/mcp.ts` dengan `@hono/mcp`.
-- [ ] Register 15 tools ke MCP server, mapping ke handler yang sama dengan REST routes (hindari duplikasi logic).
+- [ ] Implementasi `routes/mcp.ts` dengan `@hono/mcp` (per-request instantiation pattern — lihat §8).
+- [ ] Register 15 tools ke MCP server, mapping ke helper yang sama dengan REST routes.
 - [ ] Uji koneksi MCP pakai MCP Inspector atau client Claude Desktop.
 
 ### **Phase 8 — Frontend: Landing Page & Docs**
 - [ ] Scaffold Astro + Tailwind v4 sesuai design system §11.
-- [ ] Bangun `index.astro` mengikuti copy bersih §16.2-16.4 (hero, onboarding CLI, kartu harga per kategori, tabel perbandingan) — **review ulang sebelum publish, pastikan nol penyebutan stack internal**.
-- [ ] Bangun `docs.astro` sesuai batasan §16.5 (fungsional + contoh JSON, tanpa diagram arsitektur).
-- [ ] Integrasikan build Astro ke pipeline deploy Workers (static assets).
+- [ ] Bangun `index.astro` mengikuti copy bersih §16.2-16.4.
+- [ ] Bangun `docs.astro` sesuai batasan §16.5 (fungsional + contoh JSON, tanpa detail implementasi).
+- [ ] `bun run build` di folder frontend, output static ke `dist/` — Caddy serve langsung dari `dist/`.
+- [ ] Update `infra/Caddyfile` untuk serve static Astro di root dan proxy `/api/*` ke Bun backend.
 
-### **Phase 9 — Migrasi ke Mainnet/Produksi**
-- [ ] Ganti facilitator x402 dari `x402.org` ke CDP Facilitator produksi.
-- [ ] Pindahkan semua secret ke `wrangler secret put` (bukan `[vars]`).
-- [ ] Arahkan `wrangler.toml` `[[routes]]` ke domain `kawz.dev` custom.
-- [ ] Smoke test end-to-end dengan dana USDC riil dalam jumlah kecil.
+### **Phase 9 — Go Production**
+- [ ] Ganti facilitator x402 dari `x402.org` ke CDP Facilitator produksi di `middleware/x402.ts`.
+- [ ] Update `.env` di VPS dengan semua production credentials (CDP key, real EVM payee address).
+- [ ] Setup GitHub Actions SSH deploy (§14.5) — push ke `main` otomatis reload PM2 di VPS.
+- [ ] Smoke test end-to-end dengan jumlah USDC kecil.
 
 ### **Phase 10 — Registrasi & Go-Live**
-- [ ] Daftarkan origin ke x402scan dan mppscan.
-- [ ] Verifikasi listing muncul di CDP Bazaar (dengan fallback manual jika tidak, lihat §10).
+- [ ] Daftarkan origin ke x402scan dan mppscan (lihat §15).
+- [ ] Verifikasi listing muncul di CDP Bazaar (dengan fallback manual jika belum, lihat §10).
 - [ ] Monitoring awal: cek margin riil vs proyeksi harga di §4, sesuaikan bila perlu.
-- [ ] Umumkan Kawz ke komunitas `awesome-x402` / `awesome-mpp`.
+- [ ] Umumkan Lobre ke komunitas `awesome-x402` / `awesome-mpp`.
 
 ---
 
