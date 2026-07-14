@@ -5,7 +5,7 @@
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
-import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
+import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "../types";
 import { ROUTE_PRICE_MAP } from "../config/pricing";
@@ -114,12 +114,11 @@ export function createX402Middleware(env: Env): MiddlewareHandler {
 
   const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
 
-  // Register ExactEvmScheme + Bazaar extension on resourceServer.
-  // bazaarResourceServerExtension narrows the HTTP method per request at runtime.
+  // Register ExactEvmScheme for the target network.
+  // Bazaar discovery metadata is declared per-route via extensions field below.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const resourceServer = (new x402ResourceServer(facilitatorClient) as any)
-    .register(network, new ExactEvmScheme())
-    .register(bazaarResourceServerExtension);
+    .register(network, new ExactEvmScheme());
 
   const routes: Record<string, unknown> = {};
   for (const [path, pricing] of Object.entries(ROUTE_PRICE_MAP)) {
