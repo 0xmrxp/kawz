@@ -6,9 +6,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 ## [Unreleased]
-- CDP Bazaar auto-index pending (crawler verifikasi `discoverable: true` setelah facilitator aktif)
-- L3_NOT_FOUND x15 — `[info]` severity, tidak blocking
-- "Input schema is missing" x15 — `[warning]` di x402scan/mppscan, tidak blocking; `accepts[].extensions.bazaar` sudah dipasang
+- CDP Bazaar auto-index pending
+- Caddyfile manual update di VPS belum dilakukan: `cp /opt/lobre/infra/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy`
+- "Input schema is missing" x15 — `[warning]` tidak blocking; `accepts[].extensions.bazaar` sudah dipasang via 402 interceptor
+
+---
+
+## [0.9.5-dev] — 2026-07-14 · Fix Bazaar Extension Validation Error
+
+### Fixed
+- `middleware/x402.ts` — hapus top-level `extensions.bazaar` dari route config.
+  `@x402/hono` `paymentMiddleware` memvalidasi bahwa `extensions.bazaar` harus punya
+  `{info, schema}` — BAZAAR_META hanya punya `{category, tags}` → error startup di semua 15 route.
+  Fix: hapus top-level extension (aman karena `accepts[].extensions.bazaar` sudah di-inject
+  via 402 interceptor di `server.ts`). Juga hapus `BAZAAR_ACCEPT_SCHEMA` dari route config
+  (di-strip oleh paymentMiddleware, tidak efektif di sini).
+
+### Impact
+- Sebelum fix: server startup error x15 → openapi.json accessible tapi endpoint responses broken
+  → mppscan/x402scan "No discoverable endpoints found" saat rescan
+- Setelah fix: server bersih, tidak ada Bazaar validation warnings
 
 ---
 

@@ -1131,6 +1131,7 @@ Payments settle in USDC on Base, Solana, or Tempo.
 - [x] `infra/Caddyfile` — `try_files {path} {path}/index.html /index.html` (fix `/docs` fallback ke landing page)
 - [x] `docs.astro` — copy buttons di system prompt + MCP config, harga terupdate
 - [ ] Caddyfile manual update di VPS: `cp /opt/lobre/infra/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy`
+- [x] **Bazaar extension validation fix** (v0.9.5-dev) — top-level `extensions.bazaar` dihapus dari route config; `@x402/hono` memvalidasi `{info,schema}` yang tidak ada di BAZAAR_META → server startup error x15 → discovery broken. Fixed.
 - [ ] Rescan di mppscan + x402scan setelah Caddyfile update
 - [ ] CDP Bazaar auto-index pending
 - [ ] Monitoring awal: cek margin riil vs proyeksi harga di §4, sesuaikan bila perlu.
