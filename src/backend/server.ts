@@ -21,7 +21,7 @@ app.use("*", cors({
   origin: "*",
   allowMethods: ["GET", "POST", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization", "X-Payment", "X-Payment-Response", "Payment-Signature"],
-  exposeHeaders: ["X-Payment-Response", "WWW-Authenticate"],
+  exposeHeaders: ["X-Payment-Response", "WWW-Authenticate", "payment-required"],
 }));
 
 // Health — no payment required
