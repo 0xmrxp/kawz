@@ -1,13 +1,48 @@
-// MPP payment middleware — seller-side via mppx.
-// Mppx.create() returns an instance where charge() returns a Hono MiddlewareHandler.
-// We wrap it at the app level by looking up price per request path.
-// Set FORCE_PAYMENT=true to enable in dev/testnet without ENVIRONMENT=production.
+// Unified payment middleware — mppx handles both EVM x402 (Base USDC) and Tempo.
+//
+// EVM path:   mppx evm.charge() emits x402 v2 payment-required challenge.
+//             Clients pay with Base mainnet USDC via EIP-3009 transferWithAuthorization.
+//             Settlement: CDP facilitator (prod) or x402.org (dev/testnet).
+//
+// Tempo path: mppx tempo.charge() emits MPP WWW-Authenticate challenge.
+//             Clients pay with Tempo pathUSD (chainId 4217).
+//
+// mppx.compose() accepts payment from either method — client picks whichever it supports.
 
-import { Mppx } from "mppx/hono";
-import { tempo } from "mppx/server";
+import { evm, Mppx, tempo } from "mppx/hono";
+import { createCorrelationHeader } from "@coinbase/x402";
+import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "../types";
 import { ROUTE_PRICE_MAP } from "../config/pricing";
+
+const CDP_HOST = "api.cdp.coinbase.com";
+const CDP_PATH = "/platform/v2/x402";
+const CDP_URL  = `https://${CDP_HOST}${CDP_PATH}`;
+
+// Wraps globalThis.fetch to inject CDP JWT auth on every call to the facilitator.
+// mppx calls /verify and /settle with plain fetch — this adds the required Authorization header.
+function createCdpFetch(apiKeyId: string, apiKeySecret: string) {
+  return async (url: string, init: RequestInit = {}): Promise<Response> => {
+    const op = url.endsWith("/verify") ? "verify" : "settle";
+    const jwt = await generateJwt({
+      apiKeyId,
+      apiKeySecret,
+      requestMethod: "POST",
+      requestHost:   CDP_HOST,
+      requestPath:   `${CDP_PATH}/${op}`,
+    });
+    return globalThis.fetch(url, {
+      ...init,
+      headers: {
+        ...(init.headers as Record<string, string> ?? {}),
+        Authorization:         `Bearer ${jwt}`,
+        "Correlation-Context": createCorrelationHeader(),
+        "Content-Type":        "application/json",
+      },
+    });
+  };
+}
 
 export function createMppMiddleware(env: Env): MiddlewareHandler {
   const isPaymentEnabled =
@@ -17,34 +52,44 @@ export function createMppMiddleware(env: Env): MiddlewareHandler {
     return async (_c, next) => next();
   }
 
-  // Mppx.create() returns a wrapped instance where every intent method
-  // (charge, session) returns a Hono MiddlewareHandler ready for app.use().
-  // Tempo uses pathUSD (0x20c000...) as its native stablecoin, not Base USDC.
-  // MPP_TEMPO_USDC_ADDRESS should be set to the Tempo pathUSD address in production.
-  const mppx = Mppx.create({
+  const isProd = env.ENVIRONMENT === "production" && !!env.CDP_API_KEY_ID;
+
+  // ── EVM x402 method (Base mainnet USDC) ───────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const evmMethod = (evm as any).charge({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    methods: [(tempo as any)({
-      currency:  env.MPP_TEMPO_USDC_ADDRESS,
-      recipient: env.EVM_PAYEE_ADDRESS,
-    })],
-    realm:     new URL(env.BASE_URL).host,  // "lobre.lat" — hostname only, no scheme
+    currency:  (evm as any).assets.base.USDC,   // 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913, eip155:8453
+    recipient: env.EVM_PAYEE_ADDRESS,
+    x402: {
+      facilitator: isProd ? CDP_URL : "https://x402.org/facilitator",
+      ...(isProd ? { fetch: createCdpFetch(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET) } : {}),
+    },
+  });
+
+  // ── Tempo method (pathUSD, chainId 4217) ──────────────────────────────────
+  // MPP_TEMPO_USDC_ADDRESS = 0x20c0000000000000000000000000000000000000 (pathUSD on Tempo mainnet)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tempoMethod = (tempo as any)({
+    currency:  env.MPP_TEMPO_USDC_ADDRESS,
+    recipient: env.EVM_PAYEE_ADDRESS,
+  });
+
+  const mppx = Mppx.create({
+    methods: [evmMethod, tempoMethod],
+    realm:     new URL(env.BASE_URL).host,
     secretKey: env.MPP_SECRET_KEY,
   });
 
-  // App-level wrapper: look up atomicUsdc amount for the request path,
-  // then delegate to mppx.charge() which returns the per-route MiddlewareHandler.
+  // Per-request wrapper: look up decimal USD amount for the path, then gate.
+  // Tempo and EVM amounts are both decimal strings (e.g. "0.030000") — not atomic units.
   return async (c, next) => {
-    // c.req.path is basePath-relative (/v1/...) but map keys are /api/v1/...
-    const rawPath = c.req.path;
+    const rawPath   = c.req.path;
     const lookupPath = rawPath.startsWith("/v1/") ? `/api${rawPath}` : rawPath;
-    const pricing = ROUTE_PRICE_MAP[lookupPath];
-    if (!pricing) return next(); // path not in price map → pass through
+    const pricing   = ROUTE_PRICE_MAP[lookupPath];
+    if (!pricing) return next();
 
-    // mppx.charge() returns a MiddlewareHandler — call it directly
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    // Tempo charge amount is a decimal USD string (e.g. "0.03"), not atomic units.
-    // Using atomicUsdc ("30000") was causing Tempo to interpret it as $30,000.
-    const chargeHandler = (mppx as any).charge({ amount: pricing.usdAmount }) as MiddlewareHandler;
-    return chargeHandler(c, next);
+    const handler = (mppx as any).charge({ amount: pricing.usdAmount }) as MiddlewareHandler;
+    return handler(c, next);
   };
 }

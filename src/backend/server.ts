@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { loadEnv, type Variables } from "./types";
-import { createX402Middleware } from "./middleware/x402";
 import { createMppMiddleware } from "./middleware/mpp";
+// @x402/hono removed — EVM x402 now handled by mppx evm.charge() in mpp.ts
 import trading from "./routes/trading";
 import coding from "./routes/coding";
 import analysis from "./routes/analysis";
@@ -158,11 +158,9 @@ app.use("*", async (c, next) => {
   }
 });
 
-// Payment middleware — applied to all /v1/* routes and /mcp
-// Dev mode: pass-through unless FORCE_PAYMENT=true. Production: real x402 + MPP.
-app.use("/v1/*", createX402Middleware(env));
+// Payment middleware — mppx handles both EVM x402 (Base USDC) and Tempo in one pass.
+// Dev mode: pass-through unless FORCE_PAYMENT=true.
 app.use("/v1/*", createMppMiddleware(env));
-app.use("/mcp",  createX402Middleware(env));
 app.use("/mcp",  createMppMiddleware(env));
 
 // Route bundles
