@@ -28,20 +28,6 @@ function spot(): InstanceType<typeof Binance> {
   return _spot;
 }
 
-// Generic singleton map for exchanges used by token-screener.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _exchangeCache = new Map<string, any>();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getExchange(name: string): any {
-  if (!_exchangeCache.has(name)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ExClass = (ccxt as any)[name];
-    if (!ExClass) throw new Error(`unknown exchange: ${name}`);
-    _exchangeCache.set(name, new ExClass({ enableRateLimit: true }));
-  }
-  return _exchangeCache.get(name);
-}
-
 // ─── /vitals ─────────────────────────────────────────────────────────────────
 
 trading.get("/vitals", async (c) => {

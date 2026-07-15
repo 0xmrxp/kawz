@@ -26,6 +26,8 @@ jobs:
             bun install --cwd src/frontend --frozen-lockfile
             bun run build:frontend
             mkdir -p /var/log/lobre
-            pm2 reload lobre --update-env || pm2 start infra/ecosystem.config.cjs
+            cp infra/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy || true
+            pm2 reload infra/ecosystem.config.cjs --update-env \
+              || { pm2 kill 2>/dev/null || true; sleep 1; pm2 start infra/ecosystem.config.cjs; }
             pm2 save
             echo "Deploy complete: $(date)"
