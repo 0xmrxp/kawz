@@ -437,17 +437,14 @@ async function fetchGasPrices(baseRpcUrl: string) {
 
 trading.get("/token-screener", async (c) => {
   const env      = c.get("env");
-  // Default: okx — public fetchTickers() is reliably accessible server-side.
-  // Binance works via CCXT but often rate-limits bulk ticker calls from server IPs.
-  const exchange = (c.req.query("exchange") ?? "okx").toLowerCase();
   const priceMin = Math.abs(Number(c.req.query("price_change_min") ?? 5));
   const volMin   = Math.abs(Number(c.req.query("volume_change_min") ?? 1_000_000));
   const limit    = Math.min(Math.max(1, Number(c.req.query("limit") ?? 20)), 50);
-  const cacheKey = `trading:screener:${exchange}:${priceMin}:${volMin}:${limit}`;
+  const cacheKey = `trading:screener:${priceMin}:${volMin}:${limit}`;
   try {
     const data = await getOrFetch(
       env.REDIS_URL, cacheKey,
-      () => fetchTokenScreener(exchange, priceMin, volMin, limit),
+      () => fetchTokenScreener(priceMin, volMin, limit),
       { ttlSeconds: 60 }
     );
     return c.json({ success: true, bundle: "trading_engine", data });
@@ -456,46 +453,58 @@ trading.get("/token-screener", async (c) => {
   }
 });
 
-async function fetchTokenScreener(
-  exchangeName: string,
-  priceMin: number,
-  volMin:   number,
-  limit:    number,
-) {
-  const ex = getExchange(exchangeName);
-  const tickers = await ex.fetchTickers();
+async function fetchTokenScreener(priceMin: number, volMin: number, limit: number) {
+  // CoinGecko /coins/markets — free, no API key, returns 24h price change + volume
+  // for all major tokens. Better fit than CCXT fetchTickers() which fetches all
+  // exchange pairs and gets rate-limited from server IPs.
+  const url =
+    "https://api.coingecko.com/api/v3/coins/markets" +
+    "?vs_currency=usd&order=volume_desc&per_page=250&page=1" +
+    "&price_change_percentage=24h&sparkline=false";
 
-  const results = (Object.values(tickers) as Record<string, unknown>[])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((t: any) => {
-      const sym: string = t.symbol ?? "";
-      return (
-        (sym.endsWith("/USDT") || sym.endsWith("/USDC")) &&
-        t.percentage != null &&
-        Math.abs(t.percentage) >= priceMin &&
-        (t.quoteVolume ?? 0) >= volMin
-      );
-    })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .sort((a: any, b: any) => Math.abs(b.percentage) - Math.abs(a.percentage))
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error(`coingecko ${res.status}`);
+
+  const coins = (await res.json()) as {
+    symbol:                      string;
+    name:                        string;
+    current_price:               number;
+    price_change_percentage_24h: number;
+    total_volume:                number;
+    high_24h:                    number;
+    low_24h:                     number;
+    market_cap:                  number;
+  }[];
+
+  const results = coins
+    .filter(
+      (c) =>
+        Math.abs(c.price_change_percentage_24h ?? 0) >= priceMin &&
+        (c.total_volume ?? 0) >= volMin
+    )
+    .sort(
+      (a, b) =>
+        Math.abs(b.price_change_percentage_24h) -
+        Math.abs(a.price_change_percentage_24h)
+    )
     .slice(0, limit)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((t: any) => ({
-      symbol:         t.symbol,
-      price:          t.last,
-      change_24h_pct: parseFloat((t.percentage ?? 0).toFixed(2)),
-      direction:      (t.percentage ?? 0) >= 0 ? "up" : "down",
-      volume_24h_usd: Math.round(t.quoteVolume ?? 0),
-      high_24h:       t.high,
-      low_24h:        t.low,
+    .map((c) => ({
+      symbol:         c.symbol.toUpperCase() + "/USD",
+      name:           c.name,
+      price:          c.current_price,
+      change_24h_pct: parseFloat((c.price_change_percentage_24h ?? 0).toFixed(2)),
+      direction:      (c.price_change_percentage_24h ?? 0) >= 0 ? "up" : "down",
+      volume_24h_usd: Math.round(c.total_volume ?? 0),
+      high_24h:       c.high_24h,
+      low_24h:        c.low_24h,
+      market_cap:     c.market_cap,
     }));
 
   return {
-    source:   exchangeName,
-    screened: results,
-    count:    results.length,
-    filters:  { price_change_min_pct: priceMin, volume_24h_min_usd: volMin },
-    note:     "volume_change_min uses absolute 24h USD volume as proxy — CCXT does not expose intraday volume delta",
+    source:    "coingecko",
+    screened:  results,
+    count:     results.length,
+    filters:   { price_change_min_pct: priceMin, volume_24h_min_usd: volMin },
     timestamp: Date.now(),
   };
 }
