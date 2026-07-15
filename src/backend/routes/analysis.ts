@@ -214,6 +214,46 @@ analysis.post("/fact-linkage", async (c) => {
   }
 });
 
+// ─── /sentiment ──────────────────────────────────────────────────────────────
+
+analysis.post("/sentiment", async (c) => {
+  const env  = c.get("env");
+  const body = await c.req.json<{ text?: string }>().catch(() => null);
+  if (!body?.text) return c.json({ success: false, error: "'text' field required" }, 400);
+
+  try {
+    const content = await llmChat(getLLMConfig(env), {
+      temperature: 0.0,
+      maxTokens:   128,
+      jsonOutput:  true,
+      messages: [
+        {
+          role:    "system",
+          content: "You are a sentiment classifier. Return ONLY valid JSON: " +
+            '{"sentiment":"positive"|"negative"|"neutral","confidence":0.0-1.0,' +
+            '"dominant_emotion":string,"brief_reason":string}',
+        },
+        { role: "user", content: body.text.slice(0, 2000) },
+      ],
+    });
+    const parsed = JSON.parse(content);
+    return c.json({
+      success: true,
+      bundle: "live_vector_pruner",
+      data: {
+        sentiment:        parsed.sentiment,
+        confidence:       parseFloat((Number(parsed.confidence) || 0).toFixed(3)),
+        dominant_emotion: parsed.dominant_emotion ?? null,
+        brief_reason:     parsed.brief_reason ?? null,
+        char_count:       body.text.length,
+        timestamp:        Date.now(),
+      },
+    });
+  } catch {
+    return c.json({ success: false, error: "LLM inference failed" }, 503);
+  }
+});
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ClaimReview {

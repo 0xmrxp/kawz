@@ -336,4 +336,144 @@ async function fetchMevRiskIndex(rpcUrl: string) {
   };
 }
 
+// ─── /gas-tracker ────────────────────────────────────────────────────────────
+
+trading.get("/gas-tracker", async (c) => {
+  const env = c.get("env");
+  try {
+    const data = await getOrFetch(
+      env.REDIS_URL, "trading:gas-tracker",
+      () => fetchGasPrices(env.BASE_RPC_URL),
+      { ttlSeconds: 15 }
+    );
+    return c.json({ success: true, bundle: "trading_engine", data });
+  } catch {
+    return c.json({ success: false, error: "upstream unavailable" }, 503);
+  }
+});
+
+async function fetchGasPrices(baseRpcUrl: string) {
+  const rpc = async (url: string, method: string, params: unknown[] = []) => {
+    const r = await fetch(url, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
+    });
+    return ((await r.json()) as { result: unknown }).result;
+  };
+
+  const [baseRes, ethRes, solRes] = await Promise.allSettled([
+    rpc(baseRpcUrl,                               "eth_feeHistory", ["0x5", "latest", [10, 50, 90]]),
+    rpc("https://eth.llamarpc.com",               "eth_feeHistory", ["0x5", "latest", [10, 50, 90]]),
+    rpc("https://api.mainnet-beta.solana.com",    "getRecentPrioritizationFees", []),
+  ]);
+
+  const parseEip1559 = (result: unknown) => {
+    if (!result || typeof result !== "object") return null;
+    const r = result as { baseFeePerGas?: string[]; reward?: string[][] };
+    const baseFees = (r.baseFeePerGas ?? []).map(h => parseInt(h, 16));
+    const rewards  = (r.reward ?? []).map(tier => tier.map(h => parseInt(h, 16)));
+    const latestBase = baseFees[baseFees.length - 1] ?? 0;
+    const slow       = latestBase + (rewards.at(-1)?.[0] ?? 0);
+    const standard   = latestBase + (rewards.at(-1)?.[1] ?? 0);
+    const fast       = latestBase + (rewards.at(-1)?.[2] ?? 0);
+    return {
+      slow:     parseFloat((slow     / 1e9).toFixed(4)),
+      standard: parseFloat((standard / 1e9).toFixed(4)),
+      fast:     parseFloat((fast     / 1e9).toFixed(4)),
+      base_fee: parseFloat((latestBase / 1e9).toFixed(4)),
+      unit:     "gwei",
+    };
+  };
+
+  const parseSolana = (result: unknown) => {
+    if (!Array.isArray(result) || result.length === 0) return null;
+    const fees = result
+      .map((r: { prioritizationFee?: number }) => r.prioritizationFee ?? 0)
+      .sort((a, b) => a - b);
+    return {
+      low:    fees[Math.floor(fees.length * 0.1)] ?? 0,
+      medium: fees[Math.floor(fees.length * 0.5)] ?? 0,
+      high:   fees[Math.floor(fees.length * 0.9)] ?? 0,
+      unit:   "microlamports",
+    };
+  };
+
+  return {
+    base:      baseRes.status === "fulfilled" ? parseEip1559(baseRes.value) : null,
+    eth:       ethRes.status  === "fulfilled" ? parseEip1559(ethRes.value)  : null,
+    solana:    solRes.status  === "fulfilled" ? parseSolana(solRes.value)   : null,
+    timestamp: Date.now(),
+  };
+}
+
+// ─── /token-screener ─────────────────────────────────────────────────────────
+
+trading.get("/token-screener", async (c) => {
+  const env      = c.get("env");
+  const exchange = (c.req.query("exchange") ?? "binance").toLowerCase();
+  const priceMin = Math.abs(Number(c.req.query("price_change_min") ?? 5));
+  const volMin   = Math.abs(Number(c.req.query("volume_change_min") ?? 1_000_000));
+  const limit    = Math.min(Math.max(1, Number(c.req.query("limit") ?? 20)), 50);
+  const cacheKey = `trading:screener:${exchange}:${priceMin}:${volMin}:${limit}`;
+  try {
+    const data = await getOrFetch(
+      env.REDIS_URL, cacheKey,
+      () => fetchTokenScreener(exchange, priceMin, volMin, limit),
+      { ttlSeconds: 60 }
+    );
+    return c.json({ success: true, bundle: "trading_engine", data });
+  } catch {
+    return c.json({ success: false, error: "upstream unavailable" }, 503);
+  }
+});
+
+async function fetchTokenScreener(
+  exchangeName: string,
+  priceMin: number,
+  volMin:   number,
+  limit:    number,
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ExClass = (ccxt as any)[exchangeName];
+  if (!ExClass) throw new Error(`unknown exchange: ${exchangeName}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ex = new ExClass({ enableRateLimit: true }) as any;
+  const tickers = await ex.fetchTickers();
+
+  const results = (Object.values(tickers) as Record<string, unknown>[])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((t: any) => {
+      const sym: string = t.symbol ?? "";
+      return (
+        (sym.endsWith("/USDT") || sym.endsWith("/USDC")) &&
+        t.percentage != null &&
+        Math.abs(t.percentage) >= priceMin &&
+        (t.quoteVolume ?? 0) >= volMin
+      );
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .sort((a: any, b: any) => Math.abs(b.percentage) - Math.abs(a.percentage))
+    .slice(0, limit)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((t: any) => ({
+      symbol:         t.symbol,
+      price:          t.last,
+      change_24h_pct: parseFloat((t.percentage ?? 0).toFixed(2)),
+      direction:      (t.percentage ?? 0) >= 0 ? "up" : "down",
+      volume_24h_usd: Math.round(t.quoteVolume ?? 0),
+      high_24h:       t.high,
+      low_24h:        t.low,
+    }));
+
+  return {
+    source:   exchangeName,
+    screened: results,
+    count:    results.length,
+    filters:  { price_change_min_pct: priceMin, volume_24h_min_usd: volMin },
+    note:     "volume_change_min uses absolute 24h USD volume as proxy — CCXT does not expose intraday volume delta",
+    timestamp: Date.now(),
+  };
+}
+
 export default trading;

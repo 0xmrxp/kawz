@@ -24,6 +24,11 @@ export const PRICING: Record<string, EndpointPrice> = {
   "analysis.factLinkage":       { usdAmount: "0.120000", atomicUsdc: "120000" },
   // MCP server — per-request flat rate
   "mcp.request":                { usdAmount: "0.030000", atomicUsdc: "30000" },
+  // Short-term additions
+  "trading.gasTracker":         { usdAmount: "0.020000", atomicUsdc: "20000" },
+  "trading.tokenScreener":      { usdAmount: "0.050000", atomicUsdc: "50000" },
+  "coding.secretScanner":       { usdAmount: "0.040000", atomicUsdc: "40000" },
+  "analysis.sentiment":         { usdAmount: "0.030000", atomicUsdc: "30000" },
 };
 
 // Route path → pricing key map — used by payment middleware in server.ts
@@ -44,4 +49,8 @@ export const ROUTE_PRICE_MAP: Record<string, EndpointPrice> = {
   "/api/v1/analysis/memory/bias-detector":      PRICING["analysis.biasDetector"],
   "/api/v1/analysis/memory/fact-linkage":       PRICING["analysis.factLinkage"],
   "/api/mcp":                                   PRICING["mcp.request"],
+  "/api/v1/trading/engine/gas-tracker":         PRICING["trading.gasTracker"],
+  "/api/v1/trading/engine/token-screener":      PRICING["trading.tokenScreener"],
+  "/api/v1/coding/cache/secret-scanner":        PRICING["coding.secretScanner"],
+  "/api/v1/analysis/memory/sentiment":          PRICING["analysis.sentiment"],
 };

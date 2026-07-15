@@ -7,22 +7,22 @@ import PricingRow from '../components/PricingRow.astro';
 const bundles = [
   {
     name: "Trading Intelligence",
-    description: "Live market vitals, funding rates, orderbook depth, whale tracking, and MEV risk — from hybrid CEX + on-chain sources.",
-    from: "$0.030",
-    endpoints: ["vitals", "orderbook-depth", "mev-risk-index", "funding-rates", "whale-tracker"],
+    description: "Live market vitals, funding rates, orderbook depth, whale tracking, MEV risk, gas prices, and token volume screener — from CEX + on-chain sources.",
+    from: "$0.020",
+    endpoints: ["vitals", "orderbook-depth", "mev-risk-index", "funding-rates", "whale-tracker", "gas-tracker", "token-screener"],
     accent: true,
   },
   {
     name: "Coding Cache",
-    description: "AST dependency graphs, token compression, syntax validation, LLM refactor suggestions, and static security audits.",
+    description: "AST dependency graphs, token compression, syntax validation, LLM refactor suggestions, static security audits, and secret detection.",
     from: "$0.030",
-    endpoints: ["dependency-tree", "token-compressor", "syntax-heartbeat", "refactor-suggest", "security-audit"],
+    endpoints: ["dependency-tree", "token-compressor", "syntax-heartbeat", "refactor-suggest", "security-audit", "secret-scanner"],
   },
   {
     name: "Research Pruner",
-    description: "Semantic similarity scoring, named entity extraction, context re-ranking, bias detection, and claim verification.",
+    description: "Sentiment classification, semantic similarity, named entity extraction, context re-ranking, bias detection, and claim verification.",
     from: "$0.030",
-    endpoints: ["heartbeat", "entity-extractor", "context-ranker", "bias-detector", "fact-linkage"],
+    endpoints: ["sentiment", "heartbeat", "entity-extractor", "context-ranker", "bias-detector", "fact-linkage"],
   },
 ];
 
@@ -41,7 +41,7 @@ const compare = [
 ];
 ---
 
-<MainLayout title="Lobre — Agentic Infrastructure Engine" description="15 pay-per-request utility endpoints for autonomous AI agents. Trading data, code intelligence, and research tools. No sign-ups, no API keys.">
+<MainLayout title="Lobre — Agentic Infrastructure Engine" description="19 pay-per-request utility endpoints for autonomous AI agents. Trading data, code intelligence, and research tools. No sign-ups, no API keys.">
   <Header />
 
   <main style="max-width:72rem;margin:0 auto;padding:0 max(1rem,1.5vw);">

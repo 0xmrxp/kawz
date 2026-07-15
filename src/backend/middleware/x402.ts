@@ -184,6 +184,42 @@ const BAZAAR: Record<string, Record<string, unknown>> = {
     },
     output: { example: { verdict: "false", confidence: 0.97, sources: [{ url: "https://nasa.gov/apollo", excerpt: "..." }] } },
   }),
+  "/api/v1/trading/engine/gas-tracker": declareDiscoveryExtension({
+    output: { example: { base: { slow: 0.001, standard: 0.002, fast: 0.005, base_fee: 0.001, unit: "gwei" }, eth: { slow: 8, standard: 15, fast: 35, base_fee: 7, unit: "gwei" }, solana: { low: 1000, medium: 5000, high: 25000, unit: "microlamports" } } },
+  }),
+  "/api/v1/trading/engine/token-screener": declareDiscoveryExtension({
+    input: { exchange: "binance", price_change_min: 5, volume_change_min: 1000000, limit: 20 },
+    inputSchema: {
+      properties: {
+        exchange:          { type: "string", description: "CEX exchange id: binance, okx, bybit. Default: binance" },
+        price_change_min:  { type: "number", description: "Min absolute price change % in 24h. Default: 5" },
+        volume_change_min: { type: "number", description: "Min 24h volume in USD. Default: 1000000" },
+        limit:             { type: "number", description: "Max results (1–50). Default: 20" },
+      },
+    },
+    output: { example: { screened: [{ symbol: "PEPE/USDT", price: 0.0000123, change_24h_pct: 45.2, direction: "up", volume_24h_usd: 850000000 }], count: 1 } },
+  }),
+  "/api/v1/coding/cache/secret-scanner": declareDiscoveryExtension({
+    bodyType: "json",
+    input: { code: "const key = 'sk-abc123...';", strict: false },
+    inputSchema: {
+      properties: {
+        code:   { type: "string", description: "Source code to scan for hardcoded secrets" },
+        strict: { type: "boolean", description: "Enable strict mode for lower-confidence patterns. Default: false" },
+      },
+      required: ["code"],
+    },
+    output: { example: { secrets_found: [{ type: "OPENAI_API_KEY", line: 1, severity: "high", match_hint: "sk-abc...123", recommendation: "Move to environment variable" }], risk_level: "HIGH", total_found: 1, scanned_lines: 1 } },
+  }),
+  "/api/v1/analysis/memory/sentiment": declareDiscoveryExtension({
+    bodyType: "json",
+    input: { text: "This product is absolutely amazing!" },
+    inputSchema: {
+      properties: { text: { type: "string", description: "Text to classify (max 2000 chars)" } },
+      required: ["text"],
+    },
+    output: { example: { sentiment: "positive", confidence: 0.97, dominant_emotion: "joy", brief_reason: "Enthusiastic praise with superlative language" } },
+  }),
   "/api/mcp": declareDiscoveryExtension({
     bodyType: "json",
     input: { jsonrpc: "2.0", method: "tools/call", params: { name: "trading-vitals", arguments: {} }, id: 1 },
@@ -215,7 +251,11 @@ const ROUTE_DESCRIPTIONS: Record<string, string> = {
   "/api/v1/analysis/memory/context-ranker":   "Re-rank text chunks by semantic relevance to a query using sentence embeddings.",
   "/api/v1/analysis/memory/bias-detector":    "Detect framing bias, sentiment slant, and loaded language in text.",
   "/api/v1/analysis/memory/fact-linkage":     "Verify claims via fact-check databases with LLM fallback.",
-  "/api/mcp":                                "MCP server — all 15 Lobre tools via Streamable HTTP Transport.",
+  "/api/v1/trading/engine/gas-tracker":     "Gas prices for ETH, Base, and Solana — slow/standard/fast tiers in native units.",
+  "/api/v1/trading/engine/token-screener": "Scan CEX tokens by 24h price change and volume. Returns top movers above threshold.",
+  "/api/v1/coding/cache/secret-scanner":   "Detect hardcoded secrets, API keys, private keys, and tokens in source code.",
+  "/api/v1/analysis/memory/sentiment":     "Classify text sentiment as positive, negative, or neutral with confidence score.",
+  "/api/mcp":                              "MCP server — all 19 Lobre tools via Streamable HTTP Transport.",
 };
 
 export function createX402Middleware(env: Env): MiddlewareHandler {
