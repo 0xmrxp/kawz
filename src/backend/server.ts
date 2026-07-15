@@ -154,7 +154,9 @@ app.use("*", async (c, next) => {
 });
 
 // Payment middleware — @x402/hono handles EVM x402 (exact scheme, Base USDC).
-// mppx Tempo disabled pending proper dual-protocol resolution.
+// Tempo (mppx) removed from chain: @x402/hono strips X-Payment after verification,
+// causing the X-Payment skip-check in mppx to always miss and return MPP 402.
+// Proper dual-protocol support requires a pre-verification Tempo gate before x402/hono.
 // Dev mode: pass-through unless FORCE_PAYMENT=true.
 app.use("/v1/*", createX402Middleware(env));
 app.use("/mcp",  createX402Middleware(env));
