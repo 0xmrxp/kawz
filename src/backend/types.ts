@@ -15,6 +15,10 @@ export interface Env {
   // On-chain data sources (optional — sensible public defaults provided)
   BLOCKSCOUT_BASE_URL: string;
   BASE_RPC_URL: string;
+  // ETH RPC providers for gas-tracker (optional — public RPC fallbacks used if empty)
+  ETH_RPC_ALCHEMY:    string;  // https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
+  ETH_RPC_QUICKNODE:  string;  // https://xxx.quiknode.pro/xxx/
+  ETH_RPC_INFURA:     string;  // https://mainnet.infura.io/v3/YOUR_KEY
   // Google Fact Check Tools API key (free, optional — fallback to LLM if empty)
   GOOGLE_FACTCHECK_API_KEY: string;
   // Ollama self-hosted LLM (primary inference engine)
@@ -55,6 +59,9 @@ export function loadEnv(): Env {
     MPP_TEMPO_USDC_ADDRESS: process.env.MPP_TEMPO_USDC_ADDRESS ?? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     BLOCKSCOUT_BASE_URL: process.env.BLOCKSCOUT_BASE_URL ?? "https://base.blockscout.com",
     BASE_RPC_URL: process.env.BASE_RPC_URL ?? "https://mainnet.base.org",
+    ETH_RPC_ALCHEMY:   process.env.ETH_RPC_ALCHEMY   ?? "",
+    ETH_RPC_QUICKNODE: process.env.ETH_RPC_QUICKNODE ?? "",
+    ETH_RPC_INFURA:    process.env.ETH_RPC_INFURA    ?? "",
     GOOGLE_FACTCHECK_API_KEY: process.env.GOOGLE_FACTCHECK_API_KEY ?? "",
     LLM_BASE_URL: process.env.LLM_BASE_URL ?? "http://localhost:11434",
     LLM_MODEL:    process.env.LLM_MODEL    ?? "qwen2.5:3b",

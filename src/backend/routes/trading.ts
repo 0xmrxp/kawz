@@ -342,7 +342,7 @@ trading.get("/gas-tracker", async (c) => {
   try {
     const data = await getOrFetch(
       env.REDIS_URL, "trading:gas-tracker",
-      () => fetchGasPrices(env.BASE_RPC_URL),
+      () => fetchGasPrices(env.BASE_RPC_URL, env),
       { ttlSeconds: 15 }
     );
     return c.json({ success: true, bundle: "trading_engine", data });
@@ -351,21 +351,26 @@ trading.get("/gas-tracker", async (c) => {
   }
 });
 
-async function fetchGasPrices(baseRpcUrl: string) {
+async function fetchGasPrices(baseRpcUrl: string, env?: { ETH_RPC_ALCHEMY?: string; ETH_RPC_QUICKNODE?: string; ETH_RPC_INFURA?: string }) {
   const rpc = async (url: string, method: string, params: unknown[] = []) => {
     const r = await fetch(url, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
+      signal:  AbortSignal.timeout(5000),
     });
     return ((await r.json()) as { result: unknown }).result;
   };
 
-  // ETH: try multiple public RPCs in sequence — llamarpc.com rate-limits server IPs
+  // ETH: paid providers first (authenticated, reliable), public fallbacks last.
+  // Server IP is often blocked by free public RPCs; paid providers are stable.
   const ETH_RPCS = [
-    "https://eth.llamarpc.com",
+    ...(env?.ETH_RPC_ALCHEMY   ? [env.ETH_RPC_ALCHEMY]   : []),
+    ...(env?.ETH_RPC_QUICKNODE ? [env.ETH_RPC_QUICKNODE] : []),
+    ...(env?.ETH_RPC_INFURA    ? [env.ETH_RPC_INFURA]    : []),
     "https://cloudflare-eth.com",
     "https://rpc.ankr.com/eth",
+    "https://eth.llamarpc.com",
   ];
   const tryEthRpc = async () => {
     for (const url of ETH_RPCS) {
