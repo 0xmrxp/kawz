@@ -1135,13 +1135,16 @@ Payments settle in USDC on Base, Solana, or Tempo.
 - [x] Rescan di mppscan + x402scan — clean, tidak ada blocking warnings.
 - [x] **CDP Bazaar auto-index triggered** (2026-07-15) — dua transaksi real settled via CDP facilitator (`vitals` + `syntax-heartbeat`). Endpoint akan muncul di Bazaar catalog dalam ~10 menit setelah settlement. Bazaar extension format diupdate ke `declareDiscoveryExtension()` resmi + `output.example` per-route.
 - [x] **KI-002 FIXED** (2026-07-15) — EVM x402 payment dari AgentCash sekarang bekerja. Rollback ke `@x402/hono` + ExactEvmScheme. Mppx dihapus dari chain sementara (lihat §18 KI-002 update).
+- [x] **4 endpoint baru live** (2026-07-15) — gas-tracker, token-screener, secret-scanner, sentiment. Total: 19 endpoint.
+- [x] **Docs cleanup** (2026-07-15) — llms.txt/llms-full.txt/openapi.ts dibersihkan dari referensi stack internal. token-screener UI params difix.
 - [ ] Monitoring awal: cek margin riil vs proyeksi harga di §4, sesuaikan bila perlu.
-- [ ] Umumkan Lobre ke komunitas `awesome-x402` / `awesome-mpp`.
+- [ ] Umumkan Lobre ke komunitas `awesome-mpp` (github.com/mbeato/awesome-mpp) via PR — tidak butuh SDK, cukup listing service.
 - [ ] Daftarkan origin ke x402scan: `https://www.x402scan.com/resources/register`
 - [ ] Daftarkan origin ke mppscan: `https://www.mppscan.com/register`
 - [ ] Verifikasi listing muncul di CDP Bazaar catalog dan agentic.market.
-- [ ] Tempo/MPP re-enablement — implementasi pre-gate middleware untuk Tempo sebelum `@x402/hono`.
-- [ ] Error message improvement — response body yang actionable saat payment gagal.
+- [ ] Tempo/MPP re-enablement — pre-gate Tempo middleware yang berjalan sebelum @x402/hono.
+- [ ] Error message improvement — actionable hint saat payment gagal.
+- [ ] ETH gas tracker — tambah paid RPC (Infura/Alchemy/QuickNode) sebagai `ETH_RPC_URL` di env.
 
 ---
 

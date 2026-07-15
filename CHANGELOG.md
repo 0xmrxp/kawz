@@ -6,9 +6,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 ## [Unreleased]
-- Tempo/MPP re-enablement (perlu pre-gate middleware sebelum @x402/hono)
-- Error message improvement (actionable hint saat credential gagal)
-- Latency optimization: response caching agresif untuk trading endpoints
+- Tempo/MPP re-enablement (pre-gate Tempo middleware sebelum @x402/hono)
+- Error message improvement (actionable hint saat payment gagal)
+- ETH gas tracker — perlu paid RPC provider (public RPC blok server IP)
+- Web Intelligence category (url-metadata, article-parser, screenshot)
+- Agent Memory category (store, recall, forget, list — Qdrant backend)
+
+---
+
+## [1.1.0] — 2026-07-15 · 4 Endpoint Baru + Docs Cleanup
+
+### Added
+- `GET /api/v1/trading/engine/gas-tracker` ($0.020) — gas prices untuk ETH, Base, Solana.
+  EIP-1559 slow/standard/fast tiers. ETH dengan fallback chain 3 public RPCs.
+- `GET /api/v1/trading/engine/token-screener` ($0.050) — scan token top movers.
+  Source: market data API (no CEX auth). Filter: price_change_min, volume_change_min, limit.
+- `POST /api/v1/coding/cache/secret-scanner` ($0.040) — deteksi 16+ tipe secret.
+  Pattern: private key, AWS/GitHub/OpenAI/Anthropic/Stripe tokens, JWT, generic assignments.
+- `POST /api/v1/analysis/memory/sentiment` ($0.030) — klasifikasi sentimen via on-device LLM.
+  Returns: positive/negative/neutral + confidence + dominant_emotion.
+
+### Fixed
+- token-screener: ganti CCXT `fetchTickers()` → market data API.
+  CCXT bulk fetchTickers() timeout dari server IP pada semua exchange yang dicoba.
+- token-screener: tambah CCXT exchange singleton map — reuse instances antar request.
+- secret-scanner: fix OPENAI_API_KEY regex untuk format `sk-proj-...` (format baru).
+- secret-scanner: tambah `GENERIC_PASS_ASSIGN` pattern untuk variable `db_pass`/`app_pass` dll.
+- gas-tracker: ETH RPC fallback chain `[llamarpc, cloudflare-eth, ankr]`.
+
+### Changed (docs)
+- `openapi.ts`: tambah 4 endpoint baru, bersihkan tag descriptions dari internal refs.
+- `llms.txt`, `llms-full.txt`: 15→19 endpoints, hapus semua referensi stack internal
+  (Binance, Blockscout, @babel/parser, BGE, Google Fact Check API). Harga lama difix.
+- `docs.astro`: token-screener params difix (hapus exchange=binance dari UI).
+- `index.astro`: bundle descriptions + endpoint slugs diupdate.
 
 ---
 

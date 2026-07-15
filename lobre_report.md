@@ -481,33 +481,107 @@ Tidak ada provider lain di x402/MPP ecosystem yang fokus ke AI agent infrastruct
 
 ### Immediate (Minggu 1–2)
 
-- [ ] **Fix bazaar extension** — jadikan opsional, terima x402 v2 standar
-- [ ] **Perbaiki error message** — berikan hint yang actionable
-- [ ] **Verify MPP path** — pastikan MPP berfungsi sebagai fallback
+- [x] **Fix bazaar extension** — DONE (2026-07-15). Migrasi ke `declareDiscoveryExtension()` resmi + CDP facilitator.
+- [ ] **Perbaiki error message** — berikan hint yang actionable saat payment gagal
+- [x] **Verify MPP path** — Tempo dinonaktifkan sementara (mppx konflik dengan @x402/hono). Perlu pre-gate architecture.
 - [ ] **Tambahkan cache hit policy** — panggilan identik < 30 detik gratis
 
 ### Short-term (Bulan 1)
 
 - [ ] Tambahkan free tier untuk 2–3 endpoint entry-level
-- [ ] Publish dokumentasi bazaar extension spec
-- [ ] Tambahkan endpoint: `/sentiment`, `/secret-scanner`, `/token-screener`, `/gas-tracker`
+- [x] **Tambahkan endpoint short-term** — DONE (2026-07-15): `/sentiment`, `/secret-scanner`, `/token-screener`, `/gas-tracker`
 - [ ] Response time optimization → target p95 < 500ms untuk GET endpoints
+- [ ] Submit Lobre ke `awesome-mpp` (github.com/mbeato/awesome-mpp) via PR — tidak butuh SDK, cukup listing sebagai service
 
 ### Mid-term (Bulan 2–3)
 
-- [ ] Rilis kategori **Web Intelligence**
-- [ ] Rilis kategori **On-chain Intelligence**
-- [ ] Rilis **Agent Memory** endpoints (differentiator utama)
+- [ ] Rilis kategori **Web Intelligence** (url-metadata, article-parser, screenshot)
+- [ ] Rilis kategori **On-chain Intelligence** (wallet-risk-score, contract-summary, tx-classifier)
+- [ ] Rilis **Agent Memory** endpoints — differentiator utama, belum ada provider lain di x402 ecosystem
+- [ ] **Tempo/MPP re-enablement** — bangun pre-gate middleware yang independent dari @x402/hono
 - [ ] Publish agent cookbook + contoh integrasi dengan LangChain/CrewAI
-- [ ] Submit bazaar extension spec ke komunitas x402
 
 ### Long-term (Bulan 4–6)
 
 - [ ] Batch endpoint untuk semua kategori
-- [ ] SDK Python dan JavaScript
 - [ ] Webhook support untuk event-based triggers
 - [ ] Playground interaktif di docs
 - [ ] Integrasi langsung di AgentCash marketplace sebagai featured provider
+- [ ] SDK hanya jika ada demand dari developer yang mau integrate langsung (bukan agent use case)
+
+---
+
+## 10. Rencana Pengembangan Selanjutnya
+
+> Diperbarui: 15 Juli 2026. Berdasarkan kondisi aktual setelah fix dan deployment hari ini.
+
+### Status Saat Ini (15 Juli 2026)
+
+| Item | Status |
+|---|---|
+| EVM x402 payment (AgentCash) | **BERFUNGSI** — dua tx real berhasil |
+| CDP Bazaar auto-index | **TRIGGERED** — settlement pertama sudah lewat CDP |
+| agentic.market listing | Pending (~10 menit dari tx pertama) |
+| 19 endpoint aktif | **LIVE** |
+| Tempo/MPP | Dinonaktifkan sementara — konflik middleware |
+| ETH gas tracker | Partial — ETH null karena public RPC blok server IP |
+
+---
+
+### Prioritas Pengembangan Berikutnya
+
+**P0 — Segera (blocker atau near-blocker)**
+
+1. **Error message yang actionable** — Ketika payment gagal, response body saat ini tidak memberi hint cukup. Tambah `code`, `hint`, dan link ke docs.
+
+2. **Tempo/MPP re-enablement** — Arsitektur yang benar: buat pre-gate Tempo middleware yang berjalan SEBELUM `@x402/hono`, bukan setelah. Saat ini `@x402/hono` men-strip `X-Payment` header setelah verifikasi, menyebabkan mppx selalu return MPP 402 bahkan untuk EVM-paid requests.
+
+**P1 — Short-term (nilai tinggi, relatif mudah)**
+
+3. **Web Intelligence category** (5 endpoint baru):
+   - `url-metadata` — ekstrak title, OG tags, favicon dari URL
+   - `article-parser` — konten artikel bersih (strip ads/nav)
+   - `link-extractor` — semua link dari halaman
+   - `screenshot` — screenshot halaman sebagai PNG
+   - Semua bisa implementasi dengan `fetch()` + HTML parsing, zero new deps
+
+4. **On-chain Intelligence** (4 endpoint baru):
+   - `wallet-risk-score` — skor risiko wallet dari riwayat tx
+   - `contract-summary` — plain-English summary smart contract
+   - `tx-classifier` — klasifikasi transaksi: swap/bridge/NFT/yield
+   - `token-holders` — distribusi holder + Gini coefficient
+
+5. **Submit ke awesome-mpp** (PR ke github.com/mbeato/awesome-mpp) — tidak butuh SDK, cukup listing service. Lakukan segera.
+
+**P2 — Mid-term (differentiator)**
+
+6. **Agent Memory endpoints** — ini blue ocean di x402 ecosystem:
+   - `POST /agent/memory/store` — simpan memory chunk + auto-embedding
+   - `POST /agent/memory/recall` — retrieve memory relevan untuk query
+   - `DELETE /agent/memory/forget` — hapus memory spesifik
+   - `GET /agent/memory/list` — list semua memory per session
+   - Implementasi: Qdrant (sudah jalan di VPS) sebagai vector store
+
+7. **ETH gas tracker fix** — tambah `ETH_RPC_URL` ke env, pointed ke Infura/Alchemy/QuickNode berbayar. Public RPC memblok server IP.
+
+**P3 — Long-term (nice to have)**
+
+8. **Batch endpoints** — proses N item dengan diskon per-unit
+9. **Webhook support** — event-based triggers untuk price alerts, whale alerts
+10. **SDK** — hanya jika ada demand nyata dari developer yang mau integrate langsung ke kode. Untuk agent use case (target utama Lobre), tidak dibutuhkan.
+
+---
+
+### Tentang SDK dan awesome Lists
+
+**SDK tidak diperlukan untuk masuk awesome-x402 / awesome-mpp.** Ini adalah GitHub "awesome lists" — daftar komunitas yang disubmit via Pull Request. Lobre sudah memenuhi kriteria:
+- Implementasi x402 yang benar dan berjalan ✓
+- API live dengan dokumentasi lengkap ✓
+- Payment berfungsi via AgentCash ✓
+
+Cara masuk: fork repo → tambah Lobre di kategori "Services" / "APIs" → submit PR.
+
+SDK (seperti `npm install lobre-js`) berguna untuk meningkatkan developer adoption kalau target pasar adalah developer yang mau integrate Lobre ke aplikasinya. Untuk AI agents yang bayar via AgentCash, SDK tidak dibutuhkan karena agents langsung call endpoint. **Rekomendasi: skip SDK, fokus ke endpoint baru dan Bazaar adoption.**
 
 ---
 
