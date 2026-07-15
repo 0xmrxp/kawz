@@ -19,14 +19,27 @@ const TTL = {
   whaleTracks:  60,
 } as const;
 
-// ─── CCXT singleton ──────────────────────────────────────────────────────────
-// Reused across requests in the same Bun process — avoids re-initialising on every call.
+// ─── CCXT singletons ─────────────────────────────────────────────────────────
+// Reused across requests — avoids re-initialising on every call and shares rate-limit state.
 
 let _spot: InstanceType<typeof Binance> | null = null;
-
 function spot(): InstanceType<typeof Binance> {
   if (!_spot) _spot = new Binance({ enableRateLimit: true });
   return _spot;
+}
+
+// Generic singleton map for exchanges used by token-screener.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _exchangeCache = new Map<string, any>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getExchange(name: string): any {
+  if (!_exchangeCache.has(name)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ExClass = (ccxt as any)[name];
+    if (!ExClass) throw new Error(`unknown exchange: ${name}`);
+    _exchangeCache.set(name, new ExClass({ enableRateLimit: true }));
+  }
+  return _exchangeCache.get(name);
 }
 
 // ─── /vitals ─────────────────────────────────────────────────────────────────
@@ -362,10 +375,23 @@ async function fetchGasPrices(baseRpcUrl: string) {
     return ((await r.json()) as { result: unknown }).result;
   };
 
+  // ETH: try multiple public RPCs in sequence — llamarpc.com rate-limits server IPs
+  const ETH_RPCS = [
+    "https://eth.llamarpc.com",
+    "https://cloudflare-eth.com",
+    "https://rpc.ankr.com/eth",
+  ];
+  const tryEthRpc = async () => {
+    for (const url of ETH_RPCS) {
+      try { return await rpc(url, "eth_feeHistory", ["0x5", "latest", [10, 50, 90]]); } catch { /* next */ }
+    }
+    throw new Error("all ETH RPCs failed");
+  };
+
   const [baseRes, ethRes, solRes] = await Promise.allSettled([
-    rpc(baseRpcUrl,                               "eth_feeHistory", ["0x5", "latest", [10, 50, 90]]),
-    rpc("https://eth.llamarpc.com",               "eth_feeHistory", ["0x5", "latest", [10, 50, 90]]),
-    rpc("https://api.mainnet-beta.solana.com",    "getRecentPrioritizationFees", []),
+    rpc(baseRpcUrl,                            "eth_feeHistory", ["0x5", "latest", [10, 50, 90]]),
+    tryEthRpc(),
+    rpc("https://api.mainnet-beta.solana.com", "getRecentPrioritizationFees", []),
   ]);
 
   const parseEip1559 = (result: unknown) => {
@@ -411,7 +437,9 @@ async function fetchGasPrices(baseRpcUrl: string) {
 
 trading.get("/token-screener", async (c) => {
   const env      = c.get("env");
-  const exchange = (c.req.query("exchange") ?? "binance").toLowerCase();
+  // Default: okx — public fetchTickers() is reliably accessible server-side.
+  // Binance works via CCXT but often rate-limits bulk ticker calls from server IPs.
+  const exchange = (c.req.query("exchange") ?? "okx").toLowerCase();
   const priceMin = Math.abs(Number(c.req.query("price_change_min") ?? 5));
   const volMin   = Math.abs(Number(c.req.query("volume_change_min") ?? 1_000_000));
   const limit    = Math.min(Math.max(1, Number(c.req.query("limit") ?? 20)), 50);
@@ -434,11 +462,7 @@ async function fetchTokenScreener(
   volMin:   number,
   limit:    number,
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ExClass = (ccxt as any)[exchangeName];
-  if (!ExClass) throw new Error(`unknown exchange: ${exchangeName}`);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ex = new ExClass({ enableRateLimit: true }) as any;
+  const ex = getExchange(exchangeName);
   const tickers = await ex.fetchTickers();
 
   const results = (Object.values(tickers) as Record<string, unknown>[])
