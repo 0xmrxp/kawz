@@ -35,6 +35,11 @@ export function createMppMiddleware(env: Env): MiddlewareHandler {
     const pricing    = ROUTE_PRICE_MAP[lookupPath];
     if (!pricing) return next();
 
+    // X-Payment header means EVM x402 payment was attempted. If we're here,
+    // createX402Middleware already verified it successfully (invalid X-Payment
+    // causes x402/hono to return 402, so next() is never called). Skip mppx.
+    if (c.req.header("X-Payment")) return next();
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const chargeHandler = (mppx as any).charge({ amount: pricing.usdAmount }) as MiddlewareHandler;
     return chargeHandler(c, next);
