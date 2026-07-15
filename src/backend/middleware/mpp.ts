@@ -1,8 +1,8 @@
 // MPP payment middleware — Tempo only, via mppx/hono.
 //
 // EVM x402 (exact scheme, Base USDC) is handled by @x402/hono in x402.ts.
-// This middleware handles Tempo (pathUSD, chainId 4217) as a second payment option.
-// Registered after createX402Middleware in server.ts.
+// Pre-gate in server.ts routes requests with X-Payment header to x402, all others here.
+// This ensures @x402/hono never strips X-Payment before mppx sees it.
 
 import { Mppx } from "mppx/hono";
 import { tempo } from "mppx/server";
@@ -34,11 +34,6 @@ export function createMppMiddleware(env: Env): MiddlewareHandler {
     const lookupPath = rawPath.startsWith("/v1/") ? `/api${rawPath}` : rawPath;
     const pricing    = ROUTE_PRICE_MAP[lookupPath];
     if (!pricing) return next();
-
-    // X-Payment header means EVM x402 payment was attempted. If we're here,
-    // createX402Middleware already verified it successfully (invalid X-Payment
-    // causes x402/hono to return 402, so next() is never called). Skip mppx.
-    if (c.req.header("X-Payment")) return next();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const chargeHandler = (mppx as any).charge({ amount: pricing.usdAmount }) as MiddlewareHandler;

@@ -147,6 +147,14 @@ app.use("*", async (c, next) => {
           }
         }
 
+        // Actionable hint for developers and agents hitting a 402 for the first time.
+        decoded.hint = {
+          code:       "PAYMENT_REQUIRED",
+          message:    "Send USDC on Base via x402 (EVM) or Tempo (MPP). No API key needed.",
+          quickstart: `bunx agentcash fetch ${env.BASE_URL}/api/v1/trading/engine/vitals`,
+          docs:       `${env.BASE_URL}/docs`,
+        };
+
         const headers = new Headers(c.res.headers);
         const encoded = btoa(JSON.stringify(decoded));
         headers.set("content-type", "application/json");
@@ -157,17 +165,36 @@ app.use("*", async (c, next) => {
       } catch (err) {
         console.error("[402-interceptor] failed to enrich challenge:", err);
       }
+    } else {
+      // No payment-required header — @x402/hono returned a credential verification error
+      // (e.g. "Credential is malformed."). Augment with actionable hint.
+      try {
+        const raw  = await c.res.clone().text();
+        const body = JSON.parse(raw) as Record<string, unknown>;
+        if (body.error) {
+          body.hint = {
+            code:    "PAYMENT_VERIFICATION_FAILED",
+            message: "Payment credential rejected. Verify: correct payTo address, network eip155:8453, non-expired USDC permit nonce.",
+            quickstart: `bunx agentcash fetch ${env.BASE_URL}/api/v1/trading/engine/vitals`,
+            docs:    `${env.BASE_URL}/docs`,
+          };
+          const headers = new Headers(c.res.headers);
+          headers.set("content-type", "application/json");
+          c.res = new Response(JSON.stringify(body), { status: 402, headers });
+        }
+      } catch { /* non-JSON 402 body — leave as-is */ }
     }
   }
 });
 
-// Payment middleware — @x402/hono handles EVM x402 (exact scheme, Base USDC).
-// Tempo (mppx) removed from chain: @x402/hono strips X-Payment after verification,
-// causing the X-Payment skip-check in mppx to always miss and return MPP 402.
-// Proper dual-protocol support requires a pre-verification Tempo gate before x402/hono.
-// Dev mode: pass-through unless FORCE_PAYMENT=true.
-app.use("/v1/*", createX402Middleware(env));
-app.use("/mcp",  createX402Middleware(env));
+// Payment middleware — dual-protocol: x402 (EVM) + Tempo (MPP).
+// Pre-gate: EVM clients include X-Payment header → route to @x402/hono.
+// All other requests (Tempo voucher or unauthenticated) → mppx/hono.
+// This prevents @x402/hono from stripping X-Payment before mppx can check it.
+const x402 = createX402Middleware(env);
+const mpp  = createMppMiddleware(env);
+app.use("/v1/*", (c, next) => c.req.header("X-Payment") ? x402(c, next) : mpp(c, next));
+app.use("/mcp",  (c, next) => c.req.header("X-Payment") ? x402(c, next) : mpp(c, next));
 
 // Route bundles
 app.route("/v1/trading/engine", trading);

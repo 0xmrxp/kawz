@@ -6,11 +6,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 ## [Unreleased]
-- Tempo/MPP re-enablement (pre-gate Tempo middleware sebelum @x402/hono)
-- Error message improvement (actionable hint saat payment gagal)
 - ETH gas tracker — perlu paid RPC provider (public RPC blok server IP)
 - Web Intelligence category (url-metadata, article-parser, screenshot)
 - Agent Memory category (store, recall, forget, list — Qdrant backend)
+
+---
+
+## [1.2.0] — 2026-07-15 · P0: Error Hints + Tempo/MPP Re-enablement
+
+### Fixed
+- **Tempo/MPP re-enabled** — pre-gate routing di `server.ts`: request dengan `X-Payment` header
+  langsung ke `@x402/hono` (EVM x402), semua lainnya ke `mppx/hono` (Tempo).
+  Root cause KI-002: `@x402/hono` men-strip `X-Payment` setelah verifikasi sehingga mppx
+  tidak pernah melihatnya dan selalu return MPP 402. Pre-gate menghindari konflik ini.
+- **Error message actionable** — 402 response body sekarang punya field `hint` di dua kondisi:
+  1. Challenge awal (payment-required header ada): `hint.code = "PAYMENT_REQUIRED"` +
+     quickstart command + link docs.
+  2. Verifikasi gagal (credential malformed, tidak ada payment-required header):
+     `hint.code = "PAYMENT_VERIFICATION_FAILED"` + penjelasan apa yang perlu dicek.
+
+### Changed
+- `middleware/mpp.ts` — hapus `X-Payment` header check yang tidak lagi relevan dengan
+  arsitektur pre-gate. Update comment dokumentasi.
+- `server.ts` — `createX402Middleware` + `createMppMiddleware` di-instantiate sekali saat
+  startup, bukan per-request.
 
 ---
 

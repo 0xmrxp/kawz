@@ -523,7 +523,7 @@ Tidak ada provider lain di x402/MPP ecosystem yang fokus ke AI agent infrastruct
 | CDP Bazaar auto-index | **TRIGGERED** — settlement pertama sudah lewat CDP |
 | agentic.market listing | Pending (~10 menit dari tx pertama) |
 | 19 endpoint aktif | **LIVE** |
-| Tempo/MPP | Dinonaktifkan sementara — konflik middleware |
+| Tempo/MPP | **RE-ENABLED** (2026-07-15) — pre-gate routing, X-Payment → x402, lainnya → mppx |
 | ETH gas tracker | Partial — ETH null karena public RPC blok server IP |
 
 ---
@@ -532,9 +532,9 @@ Tidak ada provider lain di x402/MPP ecosystem yang fokus ke AI agent infrastruct
 
 **P0 — Segera (blocker atau near-blocker)**
 
-1. **Error message yang actionable** — Ketika payment gagal, response body saat ini tidak memberi hint cukup. Tambah `code`, `hint`, dan link ke docs.
+1. ~~**Error message yang actionable**~~ — **DONE (2026-07-15)**. Field `hint` ditambahkan ke dua kondisi: challenge awal (`code: PAYMENT_REQUIRED`) dan verifikasi gagal (`code: PAYMENT_VERIFICATION_FAILED`). Termasuk quickstart command dan link docs.
 
-2. **Tempo/MPP re-enablement** — Arsitektur yang benar: buat pre-gate Tempo middleware yang berjalan SEBELUM `@x402/hono`, bukan setelah. Saat ini `@x402/hono` men-strip `X-Payment` header setelah verifikasi, menyebabkan mppx selalu return MPP 402 bahkan untuk EVM-paid requests.
+2. ~~**Tempo/MPP re-enablement**~~ — **DONE (2026-07-15)**. Pre-gate di `server.ts`: `X-Payment` header → `@x402/hono`, semua lainnya → `mppx/hono`. KI-002 resolved.
 
 **P1 — Short-term (nilai tinggi, relatif mudah)**
 
