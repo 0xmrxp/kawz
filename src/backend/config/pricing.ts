@@ -33,6 +33,7 @@ export const PRICING: Record<string, EndpointPrice> = {
   "web.urlMetadata":            { usdAmount: "0.030000", atomicUsdc: "30000" },
   "web.articleParser":          { usdAmount: "0.050000", atomicUsdc: "50000" },
   "web.linkExtractor":          { usdAmount: "0.030000", atomicUsdc: "30000" },
+  "web.screenshot":             { usdAmount: "0.080000", atomicUsdc: "80000" },
   // On-chain Intelligence
   "onchain.walletRisk":         { usdAmount: "0.060000", atomicUsdc: "60000" },
   "onchain.contractSummary":    { usdAmount: "0.070000", atomicUsdc: "70000" },
@@ -71,6 +72,7 @@ export const ROUTE_PRICE_MAP: Record<string, EndpointPrice> = {
   "/api/v1/web/intelligence/url-metadata":      PRICING["web.urlMetadata"],
   "/api/v1/web/intelligence/article-parser":    PRICING["web.articleParser"],
   "/api/v1/web/intelligence/link-extractor":    PRICING["web.linkExtractor"],
+  "/api/v1/web/intelligence/screenshot":        PRICING["web.screenshot"],
   // On-chain Intelligence
   "/api/v1/onchain/wallet-risk-score":          PRICING["onchain.walletRisk"],
   "/api/v1/onchain/contract-summary":           PRICING["onchain.contractSummary"],

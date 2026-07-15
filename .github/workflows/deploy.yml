@@ -22,8 +22,14 @@ jobs:
             export PATH="$PATH:/root/.bun/bin"
             cd /opt/lobre
             git pull origin main
-            bun install --frozen-lockfile
+            bun install
             bun install --cwd src/frontend --frozen-lockfile
+            # Install Google Chrome for screenshot endpoint (idempotent)
+            which google-chrome-stable 2>/dev/null || {
+              wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+              apt-get install -y /tmp/chrome.deb
+              rm -f /tmp/chrome.deb
+            }
             bun run build:frontend
             mkdir -p /var/log/lobre
             cp infra/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy || true

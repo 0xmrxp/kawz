@@ -693,6 +693,21 @@ openapi.get("/openapi.json", (c) => {
         },
       },
 
+      "/v1/web/intelligence/screenshot": {
+        get: {
+          operationId: "webScreenshot",
+          summary: "Full-page screenshot of any URL as base64 PNG. Renders JavaScript. Configurable viewport.",
+          tags: ["Web"],
+          parameters: [
+            { in: "query", name: "url", required: true, schema: { type: "string" }, description: "URL to screenshot" },
+            { in: "query", name: "width", required: false, schema: { type: "number", default: 1280 }, description: "Viewport width (320–1920)" },
+            { in: "query", name: "height", required: false, schema: { type: "number", default: 800 }, description: "Viewport height (240–1080)" },
+          ],
+          ...pay("web.screenshot", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { url: { type: "string" }, screenshot_base64: { type: "string", description: "Base64-encoded PNG" }, format: { type: "string", enum: ["png"] }, viewport: { type: "object", properties: { width: { type: "number" }, height: { type: "number" } } }, timestamp: { type: "number" } } } } }),
+        },
+      },
+
       "/v1/web/intelligence/url-metadata": {
         get: {
           operationId: "webUrlMetadata",

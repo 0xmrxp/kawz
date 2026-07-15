@@ -52,6 +52,7 @@ const TESTNET_NETWORK     = "eip155:84532";  // Base Sepolia
 const MAINNET_NETWORK     = "eip155:8453";   // Base mainnet
 
 const GET_PATHS = new Set([
+  "/api/v1/web/intelligence/screenshot",
   "/api/v1/web/intelligence/url-metadata",
   "/api/v1/onchain/wallet-risk-score",
   "/api/v1/onchain/contract-summary",
@@ -243,6 +244,11 @@ const BAZAAR: Record<string, Record<string, unknown>> = {
     },
   }),
   // Web Intelligence
+  "/api/v1/web/intelligence/screenshot": declareDiscoveryExtension({
+    input: { url: "https://example.com", width: 1280, height: 800 },
+    inputSchema: { properties: { url: { type: "string" }, width: { type: "number" }, height: { type: "number" } }, required: ["url"] },
+    output: { example: { url: "https://example.com", screenshot_base64: "iVBORw0KGgo...", format: "png", viewport: { width: 1280, height: 800 } } },
+  }),
   "/api/v1/web/intelligence/url-metadata": declareDiscoveryExtension({
     input: { url: "https://example.com" },
     inputSchema: { properties: { url: { type: "string", description: "URL to extract metadata from" } }, required: ["url"] },
@@ -329,6 +335,7 @@ const ROUTE_DESCRIPTIONS: Record<string, string> = {
   "/api/v1/coding/cache/secret-scanner":   "Detect hardcoded secrets, API keys, private keys, and tokens in source code.",
   "/api/v1/analysis/memory/sentiment":     "Classify text sentiment as positive, negative, or neutral with confidence score.",
   "/api/mcp":                                    "MCP server — all Lobre tools via Streamable HTTP Transport.",
+  "/api/v1/web/intelligence/screenshot":         "Full-page screenshot of any URL as base64 PNG. Renders JavaScript. Configurable viewport.",
   "/api/v1/web/intelligence/url-metadata":       "Extract title, description, OG tags, canonical URL, and favicon from any web page.",
   "/api/v1/web/intelligence/article-parser":     "Fetch a URL and return clean article text with scripts, ads, and nav stripped.",
   "/api/v1/web/intelligence/link-extractor":     "Extract all links from a web page with text context and internal/external classification.",

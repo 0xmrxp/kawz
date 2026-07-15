@@ -1,10 +1,12 @@
-// Bundle: Web Intelligence (3 endpoints)
-// Uses native fetch + regex — zero new dependencies.
-// Helpers: fetchHtml, extractMeta, cleanArticle, extractLinks.
+// Bundle: Web Intelligence (4 endpoints)
+// url-metadata, article-parser, link-extractor: native fetch + regex, zero new deps.
+// screenshot: puppeteer-core + system Chrome/Chromium.
 
 import { Hono } from "hono";
 import type { Variables } from "../types";
 import { getOrFetch } from "../lib/cache";
+import puppeteer from "puppeteer-core";
+import type { Browser } from "puppeteer-core";
 
 const web = new Hono<{ Variables: Variables }>();
 
@@ -246,6 +248,75 @@ web.post("/link-extractor", async (c) => {
     return c.json({ success: true, bundle: "web_intelligence", data });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "fetch failed";
+    return c.json({ success: false, error: msg }, 503);
+  }
+});
+
+// ─── /screenshot ─────────────────────────────────────────────────────────────
+// Browser singleton — reused across requests, relaunched on crash.
+
+const CHROME_PATHS = [
+  process.env.PUPPETEER_EXECUTABLE_PATH,
+  "/usr/bin/google-chrome-stable",
+  "/usr/bin/google-chrome",
+  "/usr/bin/chromium-browser",
+  "/usr/bin/chromium",
+].filter(Boolean) as string[];
+
+const LAUNCH_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+  "--no-zygote",
+  "--single-process",
+];
+
+let _browser: Browser | null = null;
+
+async function getBrowser(): Promise<Browser> {
+  if (_browser?.connected) return _browser;
+  for (const executablePath of CHROME_PATHS) {
+    try {
+      _browser = await puppeteer.launch({ executablePath, headless: true, args: LAUNCH_ARGS });
+      return _browser;
+    } catch { /* try next */ }
+  }
+  throw new Error("Chrome/Chromium not found. Set PUPPETEER_EXECUTABLE_PATH or install google-chrome-stable.");
+}
+
+web.get("/screenshot", async (c) => {
+  const env = c.get("env");
+  const url = c.req.query("url");
+  const width  = Math.min(1920, Math.max(320, parseInt(c.req.query("width")  ?? "1280")));
+  const height = Math.min(1080, Math.max(240, parseInt(c.req.query("height") ?? "800")));
+
+  if (!url) return c.json({ success: false, error: "url query param required" }, 400);
+  try { new URL(url); } catch { return c.json({ success: false, error: "invalid url" }, 400); }
+
+  try {
+    const cacheKey = `web:screenshot:${width}x${height}:${url}`;
+    const data = await getOrFetch(env.REDIS_URL, cacheKey, async () => {
+      const browser = await getBrowser();
+      const page    = await browser.newPage();
+      try {
+        await page.setViewport({ width, height });
+        await page.goto(url, { waitUntil: "networkidle2", timeout: 15_000 });
+        const screenshot = await page.screenshot({ type: "png", encoding: "base64" });
+        return {
+          url,
+          screenshot_base64: screenshot as string,
+          format: "png",
+          viewport: { width, height },
+          timestamp: Date.now(),
+        };
+      } finally {
+        await page.close().catch(() => {});
+      }
+    }, { ttlSeconds: 60 });
+    return c.json({ success: true, bundle: "web_intelligence", data });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "screenshot failed";
     return c.json({ success: false, error: msg }, 503);
   }
 });

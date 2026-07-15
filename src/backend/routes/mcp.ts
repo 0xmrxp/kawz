@@ -409,6 +409,26 @@ function buildMcpServer(env: Env): McpServer {
     }
   );
 
+  server.tool("web-screenshot", "Capture a full-page screenshot of any URL as base64 PNG. Renders JavaScript.",
+    { url: z.string(), width: z.number().optional().default(1280), height: z.number().optional().default(800) },
+    async ({ url, width, height }) => {
+      // MCP tool calls the REST endpoint internally via HTTP to avoid duplicating puppeteer singleton logic
+      try {
+        new URL(url);
+        const w = Math.min(1920, Math.max(320, width));
+        const h = Math.min(1080, Math.max(240, height));
+        const res = await fetch(
+          `${env.BASE_URL}/api/v1/web/intelligence/screenshot?url=${encodeURIComponent(url)}&width=${w}&height=${h}`,
+          { signal: AbortSignal.timeout(20_000) }
+        );
+        if (!res.ok) return err("screenshot failed");
+        const json = await res.json() as { success: boolean; data?: unknown; error?: string };
+        if (!json.success) return err(json.error ?? "screenshot failed");
+        return ok(json.data);
+      } catch { return err("upstream unavailable"); }
+    }
+  );
+
   // ── On-chain Intelligence Bundle ──────────────────────────────────────────
 
   server.tool("onchain-wallet-risk-score", "Risk score 0-100 for an EVM wallet based on transaction history.",
