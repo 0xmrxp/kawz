@@ -554,10 +554,149 @@ openapi.get("/openapi.json", (c) => {
         },
       },
     },
+      "/v1/trading/engine/gas-tracker": {
+        get: {
+          operationId: "tradingGasTracker",
+          summary: "Gas prices for ETH, Base, and Solana — slow/standard/fast tiers",
+          tags: ["Trading"],
+          parameters: [],
+          ...pay("trading.gasTracker", payTo, network),
+          responses: r200({
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              bundle: { type: "string" },
+              data: {
+                type: "object",
+                properties: {
+                  base:   { type: "object", nullable: true, properties: { slow: { type: "number" }, standard: { type: "number" }, fast: { type: "number" }, base_fee: { type: "number" }, unit: { type: "string" } } },
+                  eth:    { type: "object", nullable: true, properties: { slow: { type: "number" }, standard: { type: "number" }, fast: { type: "number" }, base_fee: { type: "number" }, unit: { type: "string" } } },
+                  solana: { type: "object", nullable: true, properties: { low: { type: "number" }, medium: { type: "number" }, high: { type: "number" }, unit: { type: "string" } } },
+                  timestamp: { type: "number" },
+                },
+              },
+            },
+          }),
+        },
+      },
+
+      "/v1/trading/engine/token-screener": {
+        get: {
+          operationId: "tradingTokenScreener",
+          summary: "Scan tokens by 24h price change and volume threshold",
+          tags: ["Trading"],
+          parameters: [
+            { in: "query", name: "price_change_min", required: false, schema: { type: "number", default: 5 }, description: "Minimum absolute 24h price change %. Default: 5" },
+            { in: "query", name: "volume_change_min", required: false, schema: { type: "number", default: 1000000 }, description: "Minimum 24h volume in USD. Default: 1000000" },
+            { in: "query", name: "limit", required: false, schema: { type: "number", default: 20, maximum: 50 }, description: "Max results (1–50). Default: 20" },
+          ],
+          ...pay("trading.tokenScreener", payTo, network),
+          responses: r200({
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              bundle: { type: "string" },
+              data: {
+                type: "object",
+                properties: {
+                  screened: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        symbol:         { type: "string" },
+                        name:           { type: "string" },
+                        price:          { type: "number" },
+                        change_24h_pct: { type: "number" },
+                        direction:      { type: "string", enum: ["up", "down"] },
+                        volume_24h_usd: { type: "number" },
+                        high_24h:       { type: "number" },
+                        low_24h:        { type: "number" },
+                        market_cap:     { type: "number" },
+                      },
+                    },
+                  },
+                  count:   { type: "number" },
+                  filters: { type: "object" },
+                  timestamp: { type: "number" },
+                },
+              },
+            },
+          }),
+        },
+      },
+
+      "/v1/coding/cache/secret-scanner": {
+        post: {
+          operationId: "codingSecretScanner",
+          summary: "Detect hardcoded secrets, API keys, and private keys in source code",
+          tags: ["Coding"],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["code"], properties: { code: { type: "string" }, strict: { type: "boolean", default: false } } } } } },
+          ...pay("coding.secretScanner", payTo, network),
+          responses: r200({
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              bundle: { type: "string" },
+              data: {
+                type: "object",
+                properties: {
+                  secrets_found: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        type:           { type: "string" },
+                        line:           { type: "number" },
+                        severity:       { type: "string", enum: ["medium", "high", "critical"] },
+                        match_hint:     { type: "string" },
+                        recommendation: { type: "string" },
+                      },
+                    },
+                  },
+                  risk_level:    { type: "string", enum: ["NONE", "MEDIUM", "HIGH", "CRITICAL"] },
+                  total_found:   { type: "number" },
+                  scanned_lines: { type: "number" },
+                  timestamp:     { type: "number" },
+                },
+              },
+            },
+          }),
+        },
+      },
+
+      "/v1/analysis/memory/sentiment": {
+        post: {
+          operationId: "analysisSentiment",
+          summary: "Classify text sentiment as positive, negative, or neutral",
+          tags: ["Analysis"],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["text"], properties: { text: { type: "string" } } } } } },
+          ...pay("analysis.sentiment", payTo, network),
+          responses: r200({
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              bundle: { type: "string" },
+              data: {
+                type: "object",
+                properties: {
+                  sentiment:        { type: "string", enum: ["positive", "negative", "neutral"] },
+                  confidence:       { type: "number", minimum: 0, maximum: 1 },
+                  dominant_emotion: { type: "string", nullable: true },
+                  brief_reason:     { type: "string", nullable: true },
+                  char_count:       { type: "number" },
+                  timestamp:        { type: "number" },
+                },
+              },
+            },
+          }),
+        },
+      },
+    },
     tags: [
-      { name: "Trading", description: "Non-Stop AI Trading Engine — CEX + on-chain hybrid data" },
-      { name: "Coding",  description: "Coding Cache — AST analysis, compression, LLM security audits" },
-      { name: "Analysis", description: "Live Vector Pruner — embeddings, entities, fact verification" },
+      { name: "Trading", description: "Trading Intelligence — market data and on-chain signals" },
+      { name: "Coding",  description: "Coding Cache — analysis, compression, security, secret detection" },
+      { name: "Analysis", description: "Research Pruner — embeddings, NLP, sentiment, fact verification" },
     ],
   });
 });

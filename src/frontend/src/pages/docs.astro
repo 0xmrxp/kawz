@@ -125,9 +125,9 @@ const endpoints = [
     path: "/api/v1/trading/engine/token-screener",
     price: "$0.050",
     params: "?exchange=binance&price_change_min=5&volume_change_min=1000000&limit=20 (all optional)",
-    summary: "Scan CEX tokens by 24h price change and volume threshold. Returns top movers sorted by price change magnitude. Cached 60 seconds.",
-    request: "No body required. Optional: ?exchange=binance&price_change_min=5&volume_change_min=1000000&limit=20",
-    response: '{ "success": true, "data": { "screened": [{ "symbol": "PEPE/USDT", "price": 0.0000123, "change_24h_pct": 45.2, "direction": "up", "volume_24h_usd": 850000000 }], "count": 1, "filters": { "price_change_min_pct": 5, "volume_24h_min_usd": 1000000 } } }',
+    summary: "Scan tokens by 24h price change and volume threshold. Returns top movers sorted by price change magnitude. Cached 60 seconds.",
+    request: "No body required. Optional: ?price_change_min=5&volume_change_min=1000000&limit=20",
+    response: '{ "success": true, "data": { "screened": [{ "symbol": "PEPE/USD", "price": 0.0000123, "change_24h_pct": 45.2, "direction": "up", "volume_24h_usd": 850000000 }], "count": 1, "filters": { "price_change_min_pct": 5, "volume_24h_min_usd": 1000000 } } }',
   },
   {
     bundle: "Coding Cache",

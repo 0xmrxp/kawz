@@ -3,10 +3,10 @@
 # OpenAPI: https://lobre.lat/api/openapi.json
 # MCP:     https://lobre.lat/api/mcp
 
-> 15 pay-per-request utility endpoints for autonomous AI agents.
+> 19 pay-per-request utility endpoints for autonomous AI agents.
 > Covers trading data, code intelligence, and NLP research.
 > No sign-up. No API keys. Payment is the credential.
-> Settlement: USDC via x402 (on-chain, Base mainnet) or MPP (Tempo session-based).
+> Settlement: USDC via x402 (on-chain, Base mainnet).
 
 ---
 
@@ -24,7 +24,7 @@ Check balance: mcp__agentcash__get_balance
 
 ## System Prompt
 
-Include this in your agent system prompt to access all 15 Lobre endpoints:
+Include this in your agent system prompt to access all 19 Lobre endpoints:
 
 ---BEGIN SYSTEM PROMPT---
 You have access to Lobre (https://lobre.lat) — a pay-per-request utility API for autonomous AI agents.
@@ -41,6 +41,8 @@ TRADING INTELLIGENCE — GET, no body:
   https://lobre.lat/api/v1/trading/engine/mev-risk-index   $0.040  MEV sandwich risk score 0–100 for current Base block
   https://lobre.lat/api/v1/trading/engine/funding-rates    $0.030  BTC/ETH/SOL perpetual futures funding rates — ?symbols=BTC,ETH (omit for all)
   https://lobre.lat/api/v1/trading/engine/whale-tracker    $0.080  USDC transfers on Base — ?threshold=500000 (min USD, default 500000)
+  https://lobre.lat/api/v1/trading/engine/gas-tracker      $0.020  Gas prices (slow/standard/fast) for ETH, Base, Solana — no params
+  https://lobre.lat/api/v1/trading/engine/token-screener   $0.050  Top movers by price/volume — ?price_change_min=5&volume_change_min=1000000&limit=20
 
 CODING CACHE — POST, send JSON body:
   https://lobre.lat/api/v1/coding/cache/dependency-tree    $0.030  body: { "code": "...", "filename": "app.ts" }
@@ -48,8 +50,10 @@ CODING CACHE — POST, send JSON body:
   https://lobre.lat/api/v1/coding/cache/syntax-heartbeat   $0.030  body: { "code": "..." }
   https://lobre.lat/api/v1/coding/cache/refactor-suggest   $0.050  body: { "code": "...", "language": "typescript" }
   https://lobre.lat/api/v1/coding/cache/security-audit     $0.060  body: { "code": "...", "language": "typescript" }
+  https://lobre.lat/api/v1/coding/cache/secret-scanner     $0.040  body: { "code": "..." }
 
 RESEARCH PRUNER — POST, send JSON body:
+  https://lobre.lat/api/v1/analysis/memory/sentiment         $0.030  body: { "text": "..." }
   https://lobre.lat/api/v1/analysis/memory/heartbeat         $0.030  body: { "text_a": "...", "text_b": "..." }
   https://lobre.lat/api/v1/analysis/memory/entity-extractor  $0.060  body: { "text": "..." }
   https://lobre.lat/api/v1/analysis/memory/context-ranker    $0.050  body: { "query": "...", "chunks": ["...", "..."] }
@@ -68,7 +72,7 @@ IMPORTANT: Use mcp__agentcash__fetch for all calls. Do not invent tool names lik
 
 ## MCP Integration
 
-Lobre exposes all 15 endpoints as MCP tools via Streamable HTTP Transport.
+Lobre exposes all 19 endpoints as MCP tools via Streamable HTTP Transport.
 Add to Claude Desktop config (~/.claude/claude_desktop_config.json):
 
 {
@@ -81,36 +85,35 @@ Add to Claude Desktop config (~/.claude/claude_desktop_config.json):
 }
 
 MCP server direct URL: https://lobre.lat/api/mcp
-All 15 tools mirror the REST endpoints. AgentCash handles payment via MCP automatically.
-Note: /api/mcp requires x402/MPP payment ($0.030 per request). Only x402-capable MCP clients supported.
+All 19 tools mirror the REST endpoints. AgentCash handles payment via MCP automatically.
+Note: /api/mcp requires x402 payment ($0.030 per request).
 
 ---
 
 ## Endpoints
 
-### Bundle 1 — Trading Intelligence (from $0.030)
+### Bundle 1 — Trading Intelligence (from $0.020)
 
 GET  /api/v1/trading/engine/vitals
   price:  $0.030
-  desc:   Live BTC/ETH price, 24h change, and volume from CEX feeds.
+  desc:   Live BTC/ETH price, 24h change, and volume.
   params: ?symbols=btc,eth (optional, default: btc,eth — use btc or eth to filter)
   cache:  10s
 
 GET  /api/v1/trading/engine/orderbook-depth
   price:  $0.050
-  desc:   CEX orderbook bids/asks, spread, and book imbalance (-1 to 1).
+  desc:   Orderbook bids/asks, spread, and book imbalance (-1 to 1).
   params: ?pair=ETH/USDT (default: BTC/USDT)
   cache:  5s
 
 GET  /api/v1/trading/engine/mev-risk-index
   price: $0.040
   desc:  MEV sandwich attack risk score 0–100 for current Base block.
-         Derived from gas price distribution and repeated-sender heuristics.
   cache: 30s
 
 GET  /api/v1/trading/engine/funding-rates
   price:  $0.030
-  desc:   BTC/ETH/SOL perpetual futures funding rates from CEX futures markets.
+  desc:   BTC/ETH/SOL perpetual futures funding rates.
           Includes annualized rate and next funding timestamp.
   params: ?symbols=BTC,ETH (optional, comma-separated — omit for all three)
   cache:  15s
@@ -121,12 +124,24 @@ GET  /api/v1/trading/engine/whale-tracker
   params: ?threshold=500000 (optional, min USD amount, default 500000, min 10000)
   cache:  60s
 
+GET  /api/v1/trading/engine/gas-tracker
+  price:  $0.020
+  desc:   Gas prices for ETH, Base, and Solana — slow/standard/fast tiers.
+          Base and ETH in gwei. Solana in microlamports.
+  cache:  15s
+
+GET  /api/v1/trading/engine/token-screener
+  price:  $0.050
+  desc:   Scan tokens by 24h price change and volume. Returns top movers.
+  params: ?price_change_min=5&volume_change_min=1000000&limit=20 (all optional)
+  cache:  60s
+
 ### Bundle 2 — Coding Cache (from $0.030)
 
 POST /api/v1/coding/cache/dependency-tree
   price: $0.030
   body:  { "code": string, "filename"?: string }
-  desc:  Import/export dependency graph via @babel/parser. Supports TS/JSX.
+  desc:  Import/export dependency graph. Supports TS/JSX/ES modules.
 
 POST /api/v1/coding/cache/token-compressor
   price: $0.030
@@ -141,33 +156,44 @@ POST /api/v1/coding/cache/syntax-heartbeat
 POST /api/v1/coding/cache/refactor-suggest
   price: $0.050
   body:  { "code": string, "language"?: string }
-  desc:  LLM refactoring suggestions with severity: low|medium|high.
+  desc:  Refactoring suggestions with severity: low|medium|high.
          Returns overall_quality: poor|fair|good|excellent.
 
 POST /api/v1/coding/cache/security-audit
   price: $0.060
   body:  { "code": string, "language"?: string }
-  desc:  LLM vulnerability detection. Severity: low|medium|high|critical.
+  desc:  Vulnerability detection. Severity: low|medium|high|critical.
          Returns risk_score 0–100.
 
+POST /api/v1/coding/cache/secret-scanner
+  price: $0.040
+  body:  { "code": string, "strict"?: boolean }
+  desc:  Detect hardcoded secrets, API keys, private keys.
+         Returns risk_level: NONE|MEDIUM|HIGH|CRITICAL + line numbers.
+
 ### Bundle 3 — Research Pruner (from $0.030)
+
+POST /api/v1/analysis/memory/sentiment
+  price: $0.030
+  body:  { "text": string }
+  desc:  Classify sentiment: positive|negative|neutral with confidence score.
 
 POST /api/v1/analysis/memory/heartbeat
   price: $0.030
   body:  { "text_a": string, "text_b": string }
-  desc:  Cosine similarity via BAAI/bge-base-en-v1.5 (768-dim, CPU on-device).
+  desc:  Cosine similarity between two texts.
          Returns similarity 0–1 + interpretation: distinct|related|very similar.
 
 POST /api/v1/analysis/memory/entity-extractor
   price: $0.060
   body:  { "text": string }
-  desc:  Named entity recognition via LLM.
+  desc:  Named entity recognition.
          Types: PERSON|ORG|LOC|DATE|MONEY|PRODUCT|OTHER. Confidence: low|medium|high.
 
 POST /api/v1/analysis/memory/context-ranker
   price: $0.050
   body:  { "query": string, "chunks": string[] }
-  desc:  Re-rank chunks by semantic relevance to query. BGE embeddings + cosine similarity.
+  desc:  Re-rank chunks by semantic relevance to query.
          Returns ranked array with index + score.
 
 POST /api/v1/analysis/memory/bias-detector
@@ -180,20 +206,15 @@ POST /api/v1/analysis/memory/bias-detector
 POST /api/v1/analysis/memory/fact-linkage
   price: $0.120
   body:  { "claim": string, "language"?: string }
-  desc:  Google Fact Check Tools API (ClaimReview database) primary.
-         Falls back to LLM analysis (assessment: likely_true|likely_false|misleading|unverifiable).
+  desc:  Verify claim via fact-check database lookup with LLM fallback.
+         Returns assessment: likely_true|likely_false|misleading|unverifiable.
 
 ---
 
-## Payment Protocols
+## Payment Protocol
 
 x402  on-chain per-request, Base mainnet, USDC (eip155:8453)
-      Facilitator: api.cdp.coinbase.com/platform/v2/x402 (CDP production)
       Challenge: payment-required header, base64 JSON, x402Version: 2
-
-MPP   session-based, Tempo settlement, USDC on Base
-      Method: tempo, intent: charge
-      Address: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
 
 ---
 
