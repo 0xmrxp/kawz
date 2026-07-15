@@ -1198,4 +1198,64 @@ Semua scanner (mppscan, x402scan) dan CDP Bazaar crawler membaca dari `payment-r
 
 ---
 
+### KI-002 — mppx `evm.charge()` x402: "Credential is malformed" dari AgentCash Client
+
+**Status:** Open  
+**Severity:** Medium — EVM x402 payment dari AgentCash/Poncho tidak bisa complete; Tempo MPP masih berfungsi  
+**File terdampak:** `src/backend/middleware/mpp.ts`  
+**Ditemukan:** 15 Juli 2026, saat analisis token SLX menggunakan Lobre + foursec.xyz
+
+**Gejala:**
+
+Ketika AgentCash fetch client mencoba membayar Lobre endpoint via EVM x402 (Base USDC), server mengembalikan:
+
+```json
+{
+  "error": "Credential is malformed.",
+  "x402Version": 2
+}
+```
+
+Endpoint tetap return 402, payment tidak complete, data tidak dikembalikan. Tempo MPP path tidak terdampak — `www-authenticate` Tempo muncul benar dan challenge-nya valid.
+
+**Root cause:**
+
+Perpindahan dari `@x402/hono` (ExactEvmScheme) ke `mppx evm.charge()` mengubah format credential yang diharapkan server. Perbedaan utama:
+
+| Aspek | `@x402/hono` (lama) | `mppx evm.charge()` (baru) |
+|---|---|---|
+| Credential type | `exact` scheme (EIP-712 USDC permit) | `authorization` (EIP-3009 `transferWithAuthorization`) |
+| Header yang dibaca | `X-Payment` | `Authorization: Payment ...` |
+| Challenge format | x402 v2 `payment-required` base64 | x402 v2 `payment-required` base64 — isi berbeda |
+| Settlement flow | CDP facilitator verify/settle | mppx internal + CDP facilitator verify/settle |
+
+AgentCash payment client mengirim credential dengan format `exact` scheme (sesuai challenge `@x402/hono` lama), tapi mppx `evm.charge()` mengharapkan `authorization` credential type berbasis EIP-3009. Karena struktur payload berbeda, mppx gagal parse dan return "Credential is malformed."
+
+**Konfirmasi dari mppx source (`dist/evm/server/Charge.js`):**
+
+```javascript
+// mppx hanya menerima credential dengan credentialTypes: ["authorization"]
+if (!request.methodDetails.credentialTypes?.includes('authorization')) {
+    throw new VerificationFailedError({
+        reason: 'EVM authorization credentials are not supported for this challenge',
+    });
+}
+```
+
+Sedangkan AgentCash mengirim credential format `exact` (bukan `authorization`).
+
+**Pendekatan fix yang perlu diinvestigasi:**
+
+1. **Hybrid middleware** — kembalikan `@x402/hono` sebagai layer pertama untuk handle `exact` scheme (kompatibel dengan AgentCash), hapus `evm.charge()` dari mppx compose. mppx hanya dipakai untuk Tempo. Ini rollback parsial tapi paling kompatibel dengan existing clients.
+
+2. **Custom facilitator object** — buat implementasi facilitator custom di mppx yang menerima `exact` credential format dari AgentCash, adaptasi ke `authorization` format yang mppx harapkan sebelum diteruskan ke CDP verify/settle.
+
+3. **Tunggu mppx update** — investigasi apakah versi mppx di atas `0.8.7` menambahkan support untuk `exact` scheme credential type. Kalau ada, upgrade mppx.
+
+4. **Dua compose path** — detect credential type dari `Authorization` header awal, route ke `@x402/hono` handler untuk `exact`, ke `mppx evm.charge()` untuk `authorization`. Complex tapi backward compatible.
+
+**Opsi paling pragmatis (rekomendasi):** Opsi 1 — kembalikan `@x402/hono` untuk EVM x402, biarkan mppx handle Tempo saja. Arsitektur dual-middleware ini sudah terbukti bekerja sebelum refactor (lihat commit sebelum `31fe836`). Unified mppx compose untuk kedua protocol ditunda sampai mppx menambah support `exact` scheme atau AgentCash update client-nya.
+
+---
+
 *Dokumen ini adalah living document — update setiap kali ada perubahan kebijakan facilitator, alamat kontrak, atau skema discovery dari pihak Coinbase/Tempo/AgentCash.*
