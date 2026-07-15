@@ -7,6 +7,9 @@ import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import trading from "./routes/trading";
 import coding from "./routes/coding";
 import analysis from "./routes/analysis";
+import web from "./routes/web";
+import onchain from "./routes/onchain";
+import agentMemory from "./routes/agent";
 import openapi from "./routes/openapi";
 import mcp from "./routes/mcp";
 
@@ -53,6 +56,20 @@ const ROUTE_INPUT_SCHEMAS: Record<string, unknown> = {
   "/api/v1/trading/engine/token-screener":      { type: "object", properties: { exchange: { type: "string", default: "binance" }, price_change_min: { type: "number", default: 5 }, volume_change_min: { type: "number", default: 1000000 }, limit: { type: "number", default: 20 } } },
   "/api/v1/coding/cache/secret-scanner":        { type: "object", required: ["code"], properties: { code: { type: "string" }, strict: { type: "boolean", default: false } } },
   "/api/v1/analysis/memory/sentiment":          { type: "object", required: ["text"], properties: { text: { type: "string" } } },
+  // Web Intelligence
+  "/api/v1/web/intelligence/url-metadata":      { type: "object", required: ["url"], properties: { url: { type: "string" } } },
+  "/api/v1/web/intelligence/article-parser":    { type: "object", required: ["url"], properties: { url: { type: "string" } } },
+  "/api/v1/web/intelligence/link-extractor":    { type: "object", required: ["url"], properties: { url: { type: "string" }, internal_only: { type: "boolean", default: false } } },
+  // On-chain Intelligence
+  "/api/v1/onchain/wallet-risk-score":          { type: "object", required: ["address"], properties: { address: { type: "string" } } },
+  "/api/v1/onchain/contract-summary":           { type: "object", required: ["address"], properties: { address: { type: "string" } } },
+  "/api/v1/onchain/tx-classifier":              { type: "object", required: ["tx_hash"], properties: { tx_hash: { type: "string" } } },
+  "/api/v1/onchain/token-holders":              { type: "object", required: ["address"], properties: { address: { type: "string" }, limit: { type: "number", default: 20 } } },
+  // Agent Memory
+  "/api/v1/agent/memory/store":                 { type: "object", required: ["text", "session_id"], properties: { text: { type: "string" }, session_id: { type: "string" }, tags: { type: "array", items: { type: "string" } } } },
+  "/api/v1/agent/memory/recall":                { type: "object", required: ["query", "session_id"], properties: { query: { type: "string" }, session_id: { type: "string" }, limit: { type: "number", default: 5 }, threshold: { type: "number", default: 0.5 } } },
+  "/api/v1/agent/memory/forget":                { type: "object", required: ["memory_id", "session_id"], properties: { memory_id: { type: "string" }, session_id: { type: "string" } } },
+  "/api/v1/agent/memory/list":                  { type: "object", required: ["session_id"], properties: { session_id: { type: "string" }, limit: { type: "number", default: 20 } } },
 };
 
 // Bazaar accept schemas — injected into extensions.bazaar in 402 challenge by the
@@ -80,6 +97,17 @@ const BAZAAR_ACCEPT_SCHEMAS: Record<string, unknown> = {
   "/api/v1/trading/engine/token-screener":    declareDiscoveryExtension({ input: { exchange: "binance", price_change_min: 5, volume_change_min: 1000000 }, inputSchema: { properties: { exchange: { type: "string" }, price_change_min: { type: "number" }, volume_change_min: { type: "number" }, limit: { type: "number" } } }, output: { example: { screened: [{ symbol: "PEPE/USDT", price: 0.0000123, change_24h_pct: 45.2, direction: "up", volume_24h_usd: 850000000 }], count: 1 } } }).bazaar,
   "/api/v1/coding/cache/secret-scanner":      declareDiscoveryExtension({ bodyType: "json", input: { code: "const key = 'sk-abc123...';" }, inputSchema: { properties: { code: { type: "string" }, strict: { type: "boolean" } }, required: ["code"] }, output: { example: { secrets_found: [{ type: "OPENAI_API_KEY", line: 1, severity: "high", match_hint: "sk-abc...123" }], risk_level: "HIGH", total_found: 1, scanned_lines: 1 } } }).bazaar,
   "/api/v1/analysis/memory/sentiment":        declareDiscoveryExtension({ bodyType: "json", input: { text: "This product is amazing!" }, inputSchema: { properties: { text: { type: "string" } }, required: ["text"] }, output: { example: { sentiment: "positive", confidence: 0.97, dominant_emotion: "joy", brief_reason: "Enthusiastic praise" } } }).bazaar,
+  "/api/v1/web/intelligence/url-metadata":    declareDiscoveryExtension({ input: { url: "https://example.com" }, inputSchema: { properties: { url: { type: "string" } }, required: ["url"] }, output: { example: { title: "Example", description: "Example page", og_image: null, canonical: "https://example.com" } } }).bazaar,
+  "/api/v1/web/intelligence/article-parser":  declareDiscoveryExtension({ bodyType: "json", input: { url: "https://example.com/article" }, inputSchema: { properties: { url: { type: "string" } }, required: ["url"] }, output: { example: { title: "Article", text: "Clean text...", char_count: 4200 } } }).bazaar,
+  "/api/v1/web/intelligence/link-extractor":  declareDiscoveryExtension({ bodyType: "json", input: { url: "https://example.com" }, inputSchema: { properties: { url: { type: "string" }, internal_only: { type: "boolean" } }, required: ["url"] }, output: { example: { total_links: 42, links: [{ href: "https://example.com/page", text: "Page", internal: true }] } } }).bazaar,
+  "/api/v1/onchain/wallet-risk-score":        declareDiscoveryExtension({ input: { address: "0x1234...abcd" }, inputSchema: { properties: { address: { type: "string" } }, required: ["address"] }, output: { example: { risk_score: 25, risk_level: "low", factors: [], tx_count: 87 } } }).bazaar,
+  "/api/v1/onchain/contract-summary":         declareDiscoveryExtension({ input: { address: "0xabcd...1234" }, inputSchema: { properties: { address: { type: "string" } }, required: ["address"] }, output: { example: { name: "UniswapV3Pool", summary: "A Uniswap V3 liquidity pool for concentrated liquidity provision and swaps." } } }).bazaar,
+  "/api/v1/onchain/tx-classifier":            declareDiscoveryExtension({ bodyType: "json", input: { tx_hash: "0xabc...def" }, inputSchema: { properties: { tx_hash: { type: "string" } }, required: ["tx_hash"] }, output: { example: { type: "swap", protocol: "Uniswap V3", value_eth: 0.5 } } }).bazaar,
+  "/api/v1/onchain/token-holders":            declareDiscoveryExtension({ input: { address: "0xtoken..." }, inputSchema: { properties: { address: { type: "string" }, limit: { type: "number" } }, required: ["address"] }, output: { example: { holder_count: 20, gini_coefficient: 0.72, top_holders: [{ address: "0x...", quantity: "1000000", share_pct: 12.5 }] } } }).bazaar,
+  "/api/v1/agent/memory/store":               declareDiscoveryExtension({ bodyType: "json", input: { text: "User prefers concise responses.", session_id: "agent-xyz-001" }, inputSchema: { properties: { text: { type: "string" }, session_id: { type: "string" } }, required: ["text", "session_id"] }, output: { example: { memory_id: "uuid", session_id: "agent-xyz-001", char_count: 31 } } }).bazaar,
+  "/api/v1/agent/memory/recall":              declareDiscoveryExtension({ bodyType: "json", input: { query: "user preferences", session_id: "agent-xyz-001" }, inputSchema: { properties: { query: { type: "string" }, session_id: { type: "string" } }, required: ["query", "session_id"] }, output: { example: { results: [{ memory_id: "uuid", score: 0.91, text: "User prefers concise responses." }], count: 1 } } }).bazaar,
+  "/api/v1/agent/memory/forget":              declareDiscoveryExtension({ bodyType: "json", input: { memory_id: "uuid", session_id: "agent-xyz-001" }, inputSchema: { properties: { memory_id: { type: "string" }, session_id: { type: "string" } }, required: ["memory_id", "session_id"] }, output: { example: { memory_id: "uuid", deleted: true } } }).bazaar,
+  "/api/v1/agent/memory/list":                declareDiscoveryExtension({ input: { session_id: "agent-xyz-001" }, inputSchema: { properties: { session_id: { type: "string" } }, required: ["session_id"] }, output: { example: { memories: [{ memory_id: "uuid", text: "User prefers concise...", timestamp: 1752000000000 }], count: 1 } } }).bazaar,
 };
 
 // Populate 402 response body, inject resource.inputSchema + accepts[].extensions.bazaar.
@@ -200,6 +228,9 @@ app.use("/mcp",  (c, next) => c.req.header("X-Payment") ? x402(c, next) : mpp(c,
 app.route("/v1/trading/engine", trading);
 app.route("/v1/coding/cache", coding);
 app.route("/v1/analysis/memory", analysis);
+app.route("/v1/web/intelligence", web);
+app.route("/v1/onchain", onchain);
+app.route("/v1/agent/memory", agentMemory);
 app.route("/", openapi);  // GET /api/openapi.json
 app.route("/mcp", mcp);   // ALL /api/mcp
 

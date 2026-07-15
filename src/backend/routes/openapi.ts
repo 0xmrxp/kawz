@@ -692,11 +692,142 @@ openapi.get("/openapi.json", (c) => {
           }),
         },
       },
+
+      "/v1/web/intelligence/url-metadata": {
+        get: {
+          operationId: "webUrlMetadata",
+          summary: "Extract title, description, OG tags, canonical URL, and favicon from any web page",
+          tags: ["Web"],
+          parameters: [{ in: "query", name: "url", required: true, schema: { type: "string" }, description: "URL to fetch metadata from" }],
+          ...pay("web.urlMetadata", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { url: { type: "string" }, title: { type: "string", nullable: true }, description: { type: "string", nullable: true }, og_title: { type: "string", nullable: true }, og_image: { type: "string", nullable: true }, og_type: { type: "string", nullable: true }, canonical: { type: "string", nullable: true }, favicon: { type: "string", nullable: true }, timestamp: { type: "number" } } } } }),
+        },
+      },
+
+      "/v1/web/intelligence/article-parser": {
+        post: {
+          operationId: "webArticleParser",
+          summary: "Fetch a URL and return clean article text with scripts, ads, and nav stripped",
+          tags: ["Web"],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string" } } } } } },
+          ...pay("web.articleParser", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { url: { type: "string" }, title: { type: "string", nullable: true }, text: { type: "string" }, char_count: { type: "number" }, timestamp: { type: "number" } } } } }),
+        },
+      },
+
+      "/v1/web/intelligence/link-extractor": {
+        post: {
+          operationId: "webLinkExtractor",
+          summary: "Extract all links from a web page with text context and internal/external classification",
+          tags: ["Web"],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string" }, internal_only: { type: "boolean", default: false } } } } } },
+          ...pay("web.linkExtractor", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { url: { type: "string" }, total_links: { type: "number" }, internal_count: { type: "number" }, external_count: { type: "number" }, links: { type: "array", items: { type: "object", properties: { href: { type: "string" }, text: { type: "string" }, internal: { type: "boolean" } } } }, timestamp: { type: "number" } } } } }),
+        },
+      },
+
+      "/v1/onchain/wallet-risk-score": {
+        get: {
+          operationId: "onchainWalletRiskScore",
+          summary: "Risk score 0-100 for an EVM wallet based on transaction history and behavior",
+          tags: ["Onchain"],
+          parameters: [{ in: "query", name: "address", required: true, schema: { type: "string" }, description: "EVM wallet address (0x...)" }],
+          ...pay("onchain.walletRisk", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { address: { type: "string" }, risk_score: { type: "number" }, risk_level: { type: "string", enum: ["none", "low", "medium", "high", "critical", "unknown"] }, factors: { type: "array", items: { type: "string" } }, tx_count: { type: "number" }, timestamp: { type: "number" } } } } }),
+        },
+      },
+
+      "/v1/onchain/contract-summary": {
+        get: {
+          operationId: "onchainContractSummary",
+          summary: "Plain-English summary of a smart contract using ABI and source from Blockscout",
+          tags: ["Onchain"],
+          parameters: [{ in: "query", name: "address", required: true, schema: { type: "string" }, description: "Smart contract address (0x...)" }],
+          ...pay("onchain.contractSummary", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { address: { type: "string" }, name: { type: "string" }, summary: { type: "string" }, functions: { type: "array", items: { type: "string" } }, timestamp: { type: "number" } } } } }),
+        },
+      },
+
+      "/v1/onchain/tx-classifier": {
+        post: {
+          operationId: "onchainTxClassifier",
+          summary: "Classify a transaction as swap, bridge, NFT mint, approval, or transfer",
+          tags: ["Onchain"],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["tx_hash"], properties: { tx_hash: { type: "string", description: "Transaction hash (0x + 64 hex chars)" } } } } } },
+          ...pay("onchain.txClassifier", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { tx_hash: { type: "string" }, type: { type: "string" }, protocol: { type: "string", nullable: true }, value_eth: { type: "number", nullable: true }, from: { type: "string" }, to: { type: "string" }, timestamp: { type: "number" } } } } }),
+        },
+      },
+
+      "/v1/onchain/token-holders": {
+        get: {
+          operationId: "onchainTokenHolders",
+          summary: "Top token holders with share percentage and Gini coefficient for concentration",
+          tags: ["Onchain"],
+          parameters: [
+            { in: "query", name: "address", required: true, schema: { type: "string" }, description: "Token contract address (0x...)" },
+            { in: "query", name: "limit", required: false, schema: { type: "number", default: 20 }, description: "Max holders to return (5–50)" },
+          ],
+          ...pay("onchain.tokenHolders", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { token: { type: "string" }, holder_count: { type: "number" }, gini_coefficient: { type: "number" }, top_holders: { type: "array", items: { type: "object", properties: { address: { type: "string" }, quantity: { type: "string" }, share_pct: { type: "number" } } } }, timestamp: { type: "number" } } } } }),
+        },
+      },
+
+      "/v1/agent/memory/store": {
+        post: {
+          operationId: "agentMemoryStore",
+          summary: "Store a text memory chunk for an agent session with auto-embedding",
+          tags: ["Memory"],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["text", "session_id"], properties: { text: { type: "string", description: "Memory content (max 4000 chars)" }, session_id: { type: "string" }, tags: { type: "array", items: { type: "string" } } } } } } },
+          ...pay("agent.store", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { memory_id: { type: "string" }, session_id: { type: "string" }, char_count: { type: "number" }, timestamp: { type: "number" } } } } }),
+        },
+      },
+
+      "/v1/agent/memory/recall": {
+        post: {
+          operationId: "agentMemoryRecall",
+          summary: "Retrieve the most relevant memories for a query using semantic search",
+          tags: ["Memory"],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["query", "session_id"], properties: { query: { type: "string" }, session_id: { type: "string" }, limit: { type: "number", default: 5, description: "Max results (1–20)" }, threshold: { type: "number", default: 0.5, description: "Min similarity score (0–1)" } } } } } },
+          ...pay("agent.recall", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { session_id: { type: "string" }, query: { type: "string" }, results: { type: "array", items: { type: "object", properties: { memory_id: { type: "string" }, score: { type: "number" }, text: { type: "string" }, tags: { type: "array", items: { type: "string" } }, timestamp: { type: "number" } } } }, count: { type: "number" } } } } }),
+        },
+      },
+
+      "/v1/agent/memory/forget": {
+        post: {
+          operationId: "agentMemoryForget",
+          summary: "Delete a specific memory by ID from an agent session",
+          tags: ["Memory"],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["memory_id", "session_id"], properties: { memory_id: { type: "string" }, session_id: { type: "string" } } } } } },
+          ...pay("agent.forget", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { memory_id: { type: "string" }, deleted: { type: "boolean" } } } } }),
+        },
+      },
+
+      "/v1/agent/memory/list": {
+        get: {
+          operationId: "agentMemoryList",
+          summary: "List all stored memories for an agent session sorted by recency",
+          tags: ["Memory"],
+          parameters: [
+            { in: "query", name: "session_id", required: true, schema: { type: "string" }, description: "Agent session identifier" },
+            { in: "query", name: "limit", required: false, schema: { type: "number", default: 20 }, description: "Max memories (1–100)" },
+          ],
+          ...pay("agent.list", payTo, network),
+          responses: r200({ type: "object", properties: { success: { type: "boolean" }, bundle: { type: "string" }, data: { type: "object", properties: { session_id: { type: "string" }, memories: { type: "array", items: { type: "object", properties: { memory_id: { type: "string" }, text: { type: "string" }, tags: { type: "array", items: { type: "string" } }, char_count: { type: "number" }, timestamp: { type: "number" } } } }, count: { type: "number" } } } } }),
+        },
+      },
+
     },
     tags: [
-      { name: "Trading", description: "Trading Intelligence — market data and on-chain signals" },
-      { name: "Coding",  description: "Coding Cache — analysis, compression, security, secret detection" },
+      { name: "Trading",  description: "Trading Intelligence — market data and on-chain signals" },
+      { name: "Coding",   description: "Coding Cache — analysis, compression, security, secret detection" },
       { name: "Analysis", description: "Research Pruner — embeddings, NLP, sentiment, fact verification" },
+      { name: "Web",      description: "Web Intelligence — URL metadata, article parsing, link extraction" },
+      { name: "Onchain",  description: "On-chain Intelligence — wallet risk, contract summary, tx classification" },
+      { name: "Memory",   description: "Agent Memory — persistent vector memory backed by Qdrant" },
     ],
   });
 });

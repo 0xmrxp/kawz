@@ -35,13 +35,30 @@ RESEARCH PRUNER — POST, send JSON body:
   https://lobre.lat/api/v1/analysis/memory/bias-detector     $0.050  body: { "text": "..." }
   https://lobre.lat/api/v1/analysis/memory/fact-linkage      $0.120  body: { "claim": "...", "language": "en" }
 
+WEB INTELLIGENCE — GET/POST:
+  https://lobre.lat/api/v1/web/intelligence/url-metadata    $0.030  URL metadata (title, OG, favicon) — ?url=https://example.com
+  https://lobre.lat/api/v1/web/intelligence/article-parser  $0.050  body: { "url": "..." }
+  https://lobre.lat/api/v1/web/intelligence/link-extractor  $0.030  body: { "url": "...", "internal_only": false }
+
+ON-CHAIN INTELLIGENCE — GET/POST:
+  https://lobre.lat/api/v1/onchain/wallet-risk-score  $0.060  Wallet risk score 0–100 — ?address=0x...
+  https://lobre.lat/api/v1/onchain/contract-summary   $0.070  Plain-English contract summary — ?address=0x...
+  https://lobre.lat/api/v1/onchain/tx-classifier      $0.040  body: { "tx_hash": "0x..." }
+  https://lobre.lat/api/v1/onchain/token-holders      $0.050  Top holders + Gini — ?address=0x...&limit=20
+
+AGENT MEMORY — GET/POST:
+  https://lobre.lat/api/v1/agent/memory/store   $0.010  body: { "text": "...", "session_id": "...", "tags": [] }
+  https://lobre.lat/api/v1/agent/memory/recall  $0.030  body: { "query": "...", "session_id": "...", "limit": 5, "threshold": 0.5 }
+  https://lobre.lat/api/v1/agent/memory/forget  $0.005  body: { "memory_id": "...", "session_id": "..." }
+  https://lobre.lat/api/v1/agent/memory/list    $0.010  List session memories — ?session_id=...&limit=20
+
 RESPONSE FORMAT:
-  200 OK:  { "success": true, "bundle": "trading_engine"|"coding_cache"|"live_vector_pruner", "data": {...} }
+  200 OK:  { "success": true, "bundle": "trading_engine"|"coding_cache"|"live_vector_pruner"|"web_intelligence"|"onchain_intelligence"|"agent_memory", "data": {...} }
   402:     payment-required header contains base64 x402 v2 challenge — AgentCash handles this automatically.
   503:     { "success": false, "error": "upstream unavailable" }
 
 IMPORTANT: Call endpoints through mcp__agentcash__fetch, not as separate MCP tools. Do not invent
-tool names like mcp__lobre__vitals — that does not exist. All 15 endpoints go through mcp__agentcash__fetch.`;
+tool names like mcp__lobre__vitals — that does not exist. All 30 endpoints go through mcp__agentcash__fetch.`;
 
 const mcpConfig = `{
   "mcpServers": {
@@ -249,12 +266,122 @@ const endpoints = [
     request: '{ "claim": "The moon landing was faked.", "language": "en" }',
     response: '{ "success": true, "data": { "source": "fact_check_db", "claims": [{ "reviews": [{ "publisher": "Snopes", "rating": "False" }] }] } }',
   },
+  {
+    bundle: "Web Intelligence",
+    method: "GET",
+    path: "/api/v1/web/intelligence/url-metadata",
+    price: "$0.030",
+    params: "?url=https://example.com (required)",
+    summary: "Fetch Open Graph, meta, and canonical metadata from any public URL. Returns title, description, og_title, og_image, og_type, canonical URL, and favicon.",
+    request: "No body required. Required: ?url=https://example.com",
+    response: '{ "success": true, "data": { "title": "Example Domain", "description": "An illustrative domain.", "og_title": "Example Domain", "og_image": null, "og_type": "website", "canonical": "https://example.com/", "favicon": "https://example.com/favicon.ico", "timestamp": 1720000000000 } }',
+  },
+  {
+    bundle: "Web Intelligence",
+    method: "POST",
+    path: "/api/v1/web/intelligence/article-parser",
+    price: "$0.050",
+    params: null,
+    summary: "Extract clean article text from any public webpage. Strips navigation, ads, and boilerplate — returns only the main editorial content.",
+    request: '{ "url": "https://example.com/article" }',
+    response: '{ "success": true, "data": { "title": "My Article Title", "text": "Lorem ipsum dolor sit amet...", "char_count": 4821, "timestamp": 1720000000000 } }',
+  },
+  {
+    bundle: "Web Intelligence",
+    method: "POST",
+    path: "/api/v1/web/intelligence/link-extractor",
+    price: "$0.030",
+    params: null,
+    summary: "Extract all hyperlinks from a public URL. Optionally filter to internal links only. Returns href, anchor text, and internal/external classification for each link.",
+    request: '{ "url": "https://example.com", "internal_only": false }',
+    response: '{ "success": true, "data": { "total_links": 12, "internal_count": 8, "external_count": 4, "links": [{ "href": "https://example.com/about", "text": "About", "internal": true }], "timestamp": 1720000000000 } }',
+  },
+  {
+    bundle: "On-chain Intelligence",
+    method: "GET",
+    path: "/api/v1/onchain/wallet-risk-score",
+    price: "$0.060",
+    params: "?address=0x... (required — EVM address)",
+    summary: "Risk score (0–100) for any EVM wallet address. Derives risk_level (none/low/medium/high/critical) from on-chain behavioral heuristics including mixer interactions, high-velocity transfers, and flagged counterparties.",
+    request: "No body required. Required: ?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+    response: '{ "success": true, "data": { "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", "risk_score": 12, "risk_level": "low", "factors": ["no_mixer_interaction", "normal_velocity"], "tx_count": 1482, "timestamp": 1720000000000 } }',
+  },
+  {
+    bundle: "On-chain Intelligence",
+    method: "GET",
+    path: "/api/v1/onchain/contract-summary",
+    price: "$0.070",
+    params: "?address=0x... (required — contract address)",
+    summary: "Plain-English summary of a smart contract. Returns the contract name, a one-paragraph description of what it does, and a list of callable public functions.",
+    request: "No body required. Required: ?address=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    response: '{ "success": true, "data": { "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "name": "USDC", "summary": "Circle\'s USD Coin — an ERC-20 stablecoin pegged 1:1 to the US dollar with minting and blacklist controls.", "functions": ["transfer", "approve", "mint", "burn", "blacklist"], "timestamp": 1720000000000 } }',
+  },
+  {
+    bundle: "On-chain Intelligence",
+    method: "POST",
+    path: "/api/v1/onchain/tx-classifier",
+    price: "$0.040",
+    params: null,
+    summary: "Classify an Ethereum transaction by type: swap, bridge, nft_mint, token_approval, transfer, or contract_call. Returns the detected protocol, ETH value, sender, and recipient.",
+    request: '{ "tx_hash": "0xabc123..." }',
+    response: '{ "success": true, "data": { "tx_hash": "0xabc123...", "type": "swap", "protocol": "Uniswap V3", "value_eth": 0.5, "from": "0xSender...", "to": "0xRouter...", "timestamp": 1720000000000 } }',
+  },
+  {
+    bundle: "On-chain Intelligence",
+    method: "GET",
+    path: "/api/v1/onchain/token-holders",
+    price: "$0.050",
+    params: "?address=0x... (required), &limit=20 (optional, default 20)",
+    summary: "Top token holders for any ERC-20 contract. Returns holder count, Gini coefficient (wealth concentration), and a ranked list of addresses with quantity and share percentage.",
+    request: "No body required. Required: ?address=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&limit=5",
+    response: '{ "success": true, "data": { "token": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "holder_count": 2100000, "gini_coefficient": 0.91, "top_holders": [{ "address": "0xBig...", "quantity": "5000000000", "share_pct": 8.2 }], "timestamp": 1720000000000 } }',
+  },
+  {
+    bundle: "Agent Memory",
+    method: "POST",
+    path: "/api/v1/agent/memory/store",
+    price: "$0.010",
+    params: null,
+    summary: "Persist a text memory for a session. Accepts up to 4000 characters and optional tags for later filtering. Returns a unique memory_id for retrieval or deletion.",
+    request: '{ "text": "User prefers concise answers and dislikes jargon.", "session_id": "sess_abc123", "tags": ["preference", "communication"] }',
+    response: '{ "success": true, "data": { "memory_id": "mem_7x9k2p", "session_id": "sess_abc123", "char_count": 52, "timestamp": 1720000000000 } }',
+  },
+  {
+    bundle: "Agent Memory",
+    method: "POST",
+    path: "/api/v1/agent/memory/recall",
+    price: "$0.030",
+    params: null,
+    summary: "Semantic search over stored memories for a session. Returns the top-k most relevant memories ranked by cosine similarity score. Supports threshold filtering to suppress weak matches.",
+    request: '{ "query": "communication style", "session_id": "sess_abc123", "limit": 5, "threshold": 0.5 }',
+    response: '{ "success": true, "data": { "session_id": "sess_abc123", "query": "communication style", "results": [{ "memory_id": "mem_7x9k2p", "score": 0.91, "text": "User prefers concise answers and dislikes jargon.", "tags": ["preference", "communication"], "timestamp": 1720000000000 }], "count": 1 } }',
+  },
+  {
+    bundle: "Agent Memory",
+    method: "POST",
+    path: "/api/v1/agent/memory/forget",
+    price: "$0.005",
+    params: null,
+    summary: "Permanently delete a specific memory by ID within a session. Requires both memory_id and session_id for authorization.",
+    request: '{ "memory_id": "mem_7x9k2p", "session_id": "sess_abc123" }',
+    response: '{ "success": true, "data": { "memory_id": "mem_7x9k2p", "deleted": true } }',
+  },
+  {
+    bundle: "Agent Memory",
+    method: "GET",
+    path: "/api/v1/agent/memory/list",
+    price: "$0.010",
+    params: "?session_id=sess_abc123 (required), &limit=20 (optional, default 20)",
+    summary: "List all stored memories for a session, ordered by recency. Returns memory_id, truncated text preview, tags, character count, and creation timestamp for each entry.",
+    request: "No body required. Required: ?session_id=sess_abc123&limit=20",
+    response: '{ "success": true, "data": { "session_id": "sess_abc123", "memories": [{ "memory_id": "mem_7x9k2p", "text": "User prefers concise answers and dislikes jargon.", "tags": ["preference", "communication"], "char_count": 52, "timestamp": 1720000000000 }], "count": 1 } }',
+  },
 ];
 
 const bundles = [...new Set(endpoints.map((e) => e.bundle))];
 ---
 
-<MainLayout title="Docs — Lobre" description="How to integrate Lobre with your AI agent. System prompt, MCP setup, and full API reference for all 19 pay-per-request endpoints.">
+<MainLayout title="Docs — Lobre" description="How to integrate Lobre with your AI agent. System prompt, MCP setup, and full API reference for all 30 pay-per-request endpoints. The one-stop compute API for AI agents.">
   <Header />
 
   <main class="docs-main">
@@ -262,7 +389,7 @@ const bundles = [...new Set(endpoints.map((e) => e.bundle))];
     <!-- ─── Title ─────────────────────────────────────────────────────────── -->
     <div class="docs-title-block">
       <h1 class="docs-h1">Docs</h1>
-      <p class="docs-subtitle">Everything you need to connect an AI agent to Lobre.</p>
+      <p class="docs-subtitle">The one-stop compute API for AI agents. Everything you need to connect an AI agent to Lobre.</p>
       <div class="docs-links">
         <a href="/api/openapi.json" target="_blank" rel="noopener noreferrer" class="docs-link-chip">/openapi.json</a>
         <a href="/llms.txt" target="_blank" rel="noopener noreferrer" class="docs-link-chip">/llms.txt</a>
@@ -276,11 +403,13 @@ const bundles = [...new Set(endpoints.map((e) => e.bundle))];
     <section class="docs-section">
       <h2 class="docs-h2">What is Lobre?</h2>
       <p class="docs-body">
-        Lobre provides 19 pay-per-request utility endpoints across three bundles: live trading data
+        Lobre provides 30 pay-per-request utility endpoints across six bundles: live trading data
         (market vitals, orderbook depth, MEV risk, funding rates, whale tracking, gas prices, token screener), code intelligence
         (AST parsing, token compression, syntax validation, LLM refactoring, security audits, secret detection),
-        and research tools (sentiment, semantic similarity, entity extraction, context ranking, bias detection,
-        claim verification). All endpoints require micropayment in USDC — no sign-up, no API keys.
+        research tools (sentiment, semantic similarity, entity extraction, context ranking, bias detection,
+        claim verification), web intelligence (URL metadata, article parsing, link extraction),
+        on-chain intelligence (wallet risk scoring, contract summarization, transaction classification, token holder analysis),
+        and agent memory (store, recall, forget, list). All endpoints require micropayment in USDC — no sign-up, no API keys.
         Payment is the credential.
       </p>
       <p class="docs-body" style="margin-top:0.75rem;">
@@ -346,7 +475,7 @@ const bundles = [...new Set(endpoints.map((e) => e.bundle))];
     <section class="docs-section">
       <h2 class="docs-h2">MCP integration</h2>
       <p class="docs-sm" style="margin-bottom:1rem;">
-        Lobre exposes all 15 endpoints as MCP tools via Streamable HTTP Transport.
+        Lobre exposes all 30 endpoints as MCP tools via Streamable HTTP Transport.
         Compatible with Claude Desktop, Claude Code, and any MCP-capable agent.
         <strong class="docs-strong"> Requires x402/MPP payment ($0.030 per request)</strong> — only x402-capable clients supported.
       </p>
@@ -362,7 +491,7 @@ const bundles = [...new Set(endpoints.map((e) => e.bundle))];
       </div>
       <p class="docs-sm">
         MCP endpoint: <a href="/api/mcp" target="_blank" rel="noopener noreferrer" class="docs-link-mono">https://lobre.lat/api/mcp</a>
-        — 15 tools, mirroring every REST endpoint.
+        — 30 tools, mirroring every REST endpoint.
       </p>
     </section>
 

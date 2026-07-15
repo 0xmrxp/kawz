@@ -51,7 +51,16 @@ const TESTNET_FACILITATOR = "https://x402.org/facilitator";
 const TESTNET_NETWORK     = "eip155:84532";  // Base Sepolia
 const MAINNET_NETWORK     = "eip155:8453";   // Base mainnet
 
+const GET_PATHS = new Set([
+  "/api/v1/web/intelligence/url-metadata",
+  "/api/v1/onchain/wallet-risk-score",
+  "/api/v1/onchain/contract-summary",
+  "/api/v1/onchain/token-holders",
+  "/api/v1/agent/memory/list",
+]);
+
 function methodForPath(path: string): "GET" | "POST" {
+  if (GET_PATHS.has(path)) return "GET";
   return path.includes("/trading/") ? "GET" : "POST";
 }
 
@@ -233,6 +242,70 @@ const BAZAAR: Record<string, Record<string, unknown>> = {
       required: ["jsonrpc", "method"],
     },
   }),
+  // Web Intelligence
+  "/api/v1/web/intelligence/url-metadata": declareDiscoveryExtension({
+    input: { url: "https://example.com" },
+    inputSchema: { properties: { url: { type: "string", description: "URL to extract metadata from" } }, required: ["url"] },
+    output: { example: { title: "Example Domain", description: "Example page", og_image: null, canonical: "https://example.com", favicon: "/favicon.ico" } },
+  }),
+  "/api/v1/web/intelligence/article-parser": declareDiscoveryExtension({
+    bodyType: "json",
+    input: { url: "https://example.com/article" },
+    inputSchema: { properties: { url: { type: "string" } }, required: ["url"] },
+    output: { example: { title: "Article Title", text: "Clean article text...", char_count: 4200 } },
+  }),
+  "/api/v1/web/intelligence/link-extractor": declareDiscoveryExtension({
+    bodyType: "json",
+    input: { url: "https://example.com", internal_only: false },
+    inputSchema: { properties: { url: { type: "string" }, internal_only: { type: "boolean", description: "Return only internal links. Default: false" } }, required: ["url"] },
+    output: { example: { total_links: 42, internal_count: 18, external_count: 24, links: [{ href: "https://example.com/page", text: "Page", internal: true }] } },
+  }),
+  // On-chain Intelligence
+  "/api/v1/onchain/wallet-risk-score": declareDiscoveryExtension({
+    input: { address: "0x1234...abcd" },
+    inputSchema: { properties: { address: { type: "string", description: "EVM wallet address (0x...)" } }, required: ["address"] },
+    output: { example: { address: "0x1234...abcd", risk_score: 25, risk_level: "low", factors: [], tx_count: 87 } },
+  }),
+  "/api/v1/onchain/contract-summary": declareDiscoveryExtension({
+    input: { address: "0xabcd...1234" },
+    inputSchema: { properties: { address: { type: "string", description: "Smart contract address (0x...)" } }, required: ["address"] },
+    output: { example: { address: "0xabcd...1234", name: "UniswapV3Pool", summary: "A Uniswap V3 liquidity pool contract that enables concentrated liquidity provision and token swaps with configurable fee tiers.", functions: ["mint", "burn", "swap"] } },
+  }),
+  "/api/v1/onchain/tx-classifier": declareDiscoveryExtension({
+    bodyType: "json",
+    input: { tx_hash: "0xabc...def" },
+    inputSchema: { properties: { tx_hash: { type: "string", description: "Transaction hash (0x + 64 hex chars)" } }, required: ["tx_hash"] },
+    output: { example: { tx_hash: "0xabc...def", type: "swap", protocol: "Uniswap V3", value_eth: 0.5, from: "0x...", to: "0x..." } },
+  }),
+  "/api/v1/onchain/token-holders": declareDiscoveryExtension({
+    input: { address: "0xtoken...", limit: 20 },
+    inputSchema: { properties: { address: { type: "string", description: "Token contract address" }, limit: { type: "number", description: "Max holders to return (5–50). Default: 20" } }, required: ["address"] },
+    output: { example: { token: "0xtoken...", holder_count: 20, gini_coefficient: 0.72, top_holders: [{ address: "0x...", quantity: "1000000", share_pct: 12.5 }] } },
+  }),
+  // Agent Memory
+  "/api/v1/agent/memory/store": declareDiscoveryExtension({
+    bodyType: "json",
+    input: { text: "User prefers concise responses.", session_id: "agent-xyz-001", tags: ["preference"] },
+    inputSchema: { properties: { text: { type: "string", description: "Memory content (max 4000 chars)" }, session_id: { type: "string" }, tags: { type: "array", items: { type: "string" } } }, required: ["text", "session_id"] },
+    output: { example: { memory_id: "uuid-here", session_id: "agent-xyz-001", char_count: 31, timestamp: 1752000000000 } },
+  }),
+  "/api/v1/agent/memory/recall": declareDiscoveryExtension({
+    bodyType: "json",
+    input: { query: "user response preferences", session_id: "agent-xyz-001", limit: 5, threshold: 0.5 },
+    inputSchema: { properties: { query: { type: "string" }, session_id: { type: "string" }, limit: { type: "number", description: "Max results (1–20). Default: 5" }, threshold: { type: "number", description: "Min similarity score (0–1). Default: 0.5" } }, required: ["query", "session_id"] },
+    output: { example: { results: [{ memory_id: "uuid", score: 0.91, text: "User prefers concise responses.", tags: ["preference"] }], count: 1 } },
+  }),
+  "/api/v1/agent/memory/forget": declareDiscoveryExtension({
+    bodyType: "json",
+    input: { memory_id: "uuid-here", session_id: "agent-xyz-001" },
+    inputSchema: { properties: { memory_id: { type: "string" }, session_id: { type: "string" } }, required: ["memory_id", "session_id"] },
+    output: { example: { memory_id: "uuid-here", deleted: true } },
+  }),
+  "/api/v1/agent/memory/list": declareDiscoveryExtension({
+    input: { session_id: "agent-xyz-001", limit: 20 },
+    inputSchema: { properties: { session_id: { type: "string" }, limit: { type: "number", description: "Max memories (1–100). Default: 20" } }, required: ["session_id"] },
+    output: { example: { memories: [{ memory_id: "uuid", text: "User prefers concise...", tags: [], timestamp: 1752000000000 }], count: 1 } },
+  }),
 };
 
 const ROUTE_DESCRIPTIONS: Record<string, string> = {
@@ -255,7 +328,18 @@ const ROUTE_DESCRIPTIONS: Record<string, string> = {
   "/api/v1/trading/engine/token-screener": "Scan CEX tokens by 24h price change and volume. Returns top movers above threshold.",
   "/api/v1/coding/cache/secret-scanner":   "Detect hardcoded secrets, API keys, private keys, and tokens in source code.",
   "/api/v1/analysis/memory/sentiment":     "Classify text sentiment as positive, negative, or neutral with confidence score.",
-  "/api/mcp":                              "MCP server — all 19 Lobre tools via Streamable HTTP Transport.",
+  "/api/mcp":                                    "MCP server — all Lobre tools via Streamable HTTP Transport.",
+  "/api/v1/web/intelligence/url-metadata":       "Extract title, description, OG tags, canonical URL, and favicon from any web page.",
+  "/api/v1/web/intelligence/article-parser":     "Fetch a URL and return clean article text with scripts, ads, and nav stripped.",
+  "/api/v1/web/intelligence/link-extractor":     "Extract all links from a web page with text context and internal/external classification.",
+  "/api/v1/onchain/wallet-risk-score":           "Risk score (0-100) for an EVM wallet based on failed tx ratio and behavior patterns.",
+  "/api/v1/onchain/contract-summary":            "Plain-English summary of a smart contract using ABI and source code from Blockscout.",
+  "/api/v1/onchain/tx-classifier":               "Classify a transaction as swap, bridge, NFT mint, approval, or transfer by input signature.",
+  "/api/v1/onchain/token-holders":               "Top holders for a token contract with Gini coefficient for concentration analysis.",
+  "/api/v1/agent/memory/store":                  "Store a text memory chunk for an agent session with auto-embedding.",
+  "/api/v1/agent/memory/recall":                 "Retrieve the most relevant memories for a query within a session using semantic search.",
+  "/api/v1/agent/memory/forget":                 "Delete a specific memory by ID from an agent session.",
+  "/api/v1/agent/memory/list":                   "List all stored memories for an agent session, sorted by recency.",
 };
 
 export function createX402Middleware(env: Env): MiddlewareHandler {

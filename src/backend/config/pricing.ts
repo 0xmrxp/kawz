@@ -29,6 +29,20 @@ export const PRICING: Record<string, EndpointPrice> = {
   "trading.tokenScreener":      { usdAmount: "0.050000", atomicUsdc: "50000" },
   "coding.secretScanner":       { usdAmount: "0.040000", atomicUsdc: "40000" },
   "analysis.sentiment":         { usdAmount: "0.030000", atomicUsdc: "30000" },
+  // Web Intelligence
+  "web.urlMetadata":            { usdAmount: "0.030000", atomicUsdc: "30000" },
+  "web.articleParser":          { usdAmount: "0.050000", atomicUsdc: "50000" },
+  "web.linkExtractor":          { usdAmount: "0.030000", atomicUsdc: "30000" },
+  // On-chain Intelligence
+  "onchain.walletRisk":         { usdAmount: "0.060000", atomicUsdc: "60000" },
+  "onchain.contractSummary":    { usdAmount: "0.070000", atomicUsdc: "70000" },
+  "onchain.txClassifier":       { usdAmount: "0.040000", atomicUsdc: "40000" },
+  "onchain.tokenHolders":       { usdAmount: "0.050000", atomicUsdc: "50000" },
+  // Agent Memory
+  "agent.store":                { usdAmount: "0.010000", atomicUsdc: "10000" },
+  "agent.recall":               { usdAmount: "0.030000", atomicUsdc: "30000" },
+  "agent.forget":               { usdAmount: "0.005000", atomicUsdc: "5000"  },
+  "agent.list":                 { usdAmount: "0.010000", atomicUsdc: "10000" },
 };
 
 // Route path → pricing key map — used by payment middleware in server.ts
@@ -53,4 +67,18 @@ export const ROUTE_PRICE_MAP: Record<string, EndpointPrice> = {
   "/api/v1/trading/engine/token-screener":      PRICING["trading.tokenScreener"],
   "/api/v1/coding/cache/secret-scanner":        PRICING["coding.secretScanner"],
   "/api/v1/analysis/memory/sentiment":          PRICING["analysis.sentiment"],
+  // Web Intelligence
+  "/api/v1/web/intelligence/url-metadata":      PRICING["web.urlMetadata"],
+  "/api/v1/web/intelligence/article-parser":    PRICING["web.articleParser"],
+  "/api/v1/web/intelligence/link-extractor":    PRICING["web.linkExtractor"],
+  // On-chain Intelligence
+  "/api/v1/onchain/wallet-risk-score":          PRICING["onchain.walletRisk"],
+  "/api/v1/onchain/contract-summary":           PRICING["onchain.contractSummary"],
+  "/api/v1/onchain/tx-classifier":              PRICING["onchain.txClassifier"],
+  "/api/v1/onchain/token-holders":              PRICING["onchain.tokenHolders"],
+  // Agent Memory
+  "/api/v1/agent/memory/store":                 PRICING["agent.store"],
+  "/api/v1/agent/memory/recall":                PRICING["agent.recall"],
+  "/api/v1/agent/memory/forget":                PRICING["agent.forget"],
+  "/api/v1/agent/memory/list":                  PRICING["agent.list"],
 };

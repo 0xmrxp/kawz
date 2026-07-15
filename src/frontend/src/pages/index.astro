@@ -24,6 +24,24 @@ const bundles = [
     from: "$0.030",
     endpoints: ["sentiment", "heartbeat", "entity-extractor", "context-ranker", "bias-detector", "fact-linkage"],
   },
+  {
+    name: "Web Intelligence",
+    description: "URL metadata extraction, clean article parsing, and full link graph from any web page. Zero external API keys.",
+    from: "$0.030",
+    endpoints: ["url-metadata", "article-parser", "link-extractor"],
+  },
+  {
+    name: "On-chain Intelligence",
+    description: "Wallet risk scoring, smart contract plain-English summaries, transaction classification, and token holder concentration analysis.",
+    from: "$0.040",
+    endpoints: ["wallet-risk-score", "contract-summary", "tx-classifier", "token-holders"],
+  },
+  {
+    name: "Agent Memory",
+    description: "Persistent vector memory for autonomous agents — store, recall, and forget across sessions. Backed by Qdrant, session-scoped.",
+    from: "$0.005",
+    endpoints: ["store", "recall", "forget", "list"],
+  },
 ];
 
 const steps = [
@@ -41,7 +59,7 @@ const compare = [
 ];
 ---
 
-<MainLayout title="Lobre — Agentic Infrastructure Engine" description="19 pay-per-request utility endpoints for autonomous AI agents. Trading data, code intelligence, and research tools. No sign-ups, no API keys.">
+<MainLayout title="Lobre — The one-stop compute API for AI agents" description="30 pay-per-request utility endpoints for autonomous AI agents. Trading, coding, research, web, on-chain, and agent memory. No credentials. Pay per call.">
   <Header />
 
   <main style="max-width:72rem;margin:0 auto;padding:0 max(1rem,1.5vw);">
@@ -52,15 +70,11 @@ const compare = [
         Agentic Infrastructure
       </p>
       <h1 style="font-size:clamp(2rem,5vw,3.5rem);font-weight:700;line-height:1.1;letter-spacing:-0.03em;color:#F3F4F6;max-width:36rem;margin-bottom:1rem;">
-        Infrastructure agents can keep reaching for.
+        The one-stop compute API for AI agents.
       </h1>
-      <p style="font-size:1.25rem;color:#9CA3AF;margin-bottom:0.75rem;">
-        Your agent explores. You pay pennies.
-      </p>
-      <p style="font-size:1rem;color:#9CA3AF;max-width:40rem;line-height:1.65;margin-bottom:3rem;">
-        Lobre unifies 15 utility endpoints across trading, coding, and research
-        behind one stateless interface. No sign-ups. No credential overhead.
-        Real-time settlement.
+      <p style="font-size:1.125rem;color:#9CA3AF;max-width:40rem;line-height:1.65;margin-bottom:3rem;">
+        30 utility endpoints across trading, coding, research, web, on-chain, and
+        agent memory. No credentials. Pay per call. x402 + MPP.
       </p>
 
       <!-- CLI Onboarding -->
@@ -75,7 +89,7 @@ const compare = [
     <!-- ─── Bundle Pricing ───────────────────────────────────────────────── -->
     <section style="margin-bottom:5rem;">
       <h2 style="font-size:1.5rem;font-weight:700;letter-spacing:-0.02em;color:#F3F4F6;margin-bottom:0.5rem;">
-        Three bundles. One interface.
+        Six bundles. One interface.
       </h2>
       <p style="color:#9CA3AF;margin-bottom:2rem;font-size:0.9375rem;">
         Every endpoint is pay-per-request. Your agent only pays for what it uses.

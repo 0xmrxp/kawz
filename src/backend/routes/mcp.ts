@@ -328,6 +328,258 @@ function buildMcpServer(env: Env): McpServer {
     }
   );
 
+  // ── Web Intelligence Bundle ───────────────────────────────────────────────
+
+  server.tool("web-url-metadata", "Extract title, description, OG tags, canonical URL, and favicon from any web page.",
+    { url: z.string() },
+    async ({ url }) => {
+      try {
+        const res = await fetch(url, { headers: { "User-Agent": "Lobre/1.2" }, signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return err("failed to fetch URL");
+        const html = await res.text();
+        const tag = (re: RegExp) => { const m = re.exec(html); return m ? (m[1] ?? m[2] ?? null) : null; };
+        const title       = tag(/<title[^>]*>([^<]*)<\/title>/i);
+        const description = tag(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)
+                         ?? tag(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i);
+        const ogTitle     = tag(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i)
+                         ?? tag(/<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:title["']/i);
+        const ogImage     = tag(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']*)["']/i)
+                         ?? tag(/<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:image["']/i);
+        const canonical   = tag(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']*)["']/i)
+                         ?? tag(/<link[^>]+href=["']([^"']*)["'][^>]+rel=["']canonical["']/i);
+        const favicon     = tag(/<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']*)["']/i)
+                         ?? tag(/<link[^>]+href=["']([^"']*)["'][^>]+rel=["'](?:shortcut )?icon["']/i);
+        return ok({ url, title, description, og_title: ogTitle, og_image: ogImage, canonical, favicon });
+      } catch { return err("upstream unavailable"); }
+    }
+  );
+
+  server.tool("web-article-parser", "Fetch a URL and return clean article text with scripts, ads, and nav stripped.",
+    { url: z.string() },
+    async ({ url }) => {
+      try {
+        const res = await fetch(url, { headers: { "User-Agent": "Lobre/1.2" }, signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return err("failed to fetch URL");
+        const html = await res.text();
+        const titleMatch = /<title[^>]*>([^<]*)<\/title>/i.exec(html);
+        const title = titleMatch?.[1]?.trim() ?? null;
+        let body = html
+          .replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+          .replace(/<header[\s\S]*?<\/header>/gi, "")
+          .replace(/<footer[\s\S]*?<\/footer>/gi, "");
+        const articleMatch = /<article[\s\S]*?<\/article>/i.exec(body) ?? /<main[\s\S]*?<\/main>/i.exec(body);
+        if (articleMatch) body = articleMatch[0];
+        const text = body
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 6000);
+        return ok({ title, text, char_count: text.length });
+      } catch { return err("upstream unavailable"); }
+    }
+  );
+
+  server.tool("web-link-extractor", "Extract all links from a web page with text and internal/external classification.",
+    { url: z.string(), internal_only: z.boolean().optional().default(false) },
+    async ({ url, internal_only }) => {
+      try {
+        const res = await fetch(url, { headers: { "User-Agent": "Lobre/1.2" }, signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return err("failed to fetch URL");
+        const html = await res.text();
+        const origin = new URL(url).origin;
+        const linkRe = /<a[^>]+href=["']([^"'#][^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+        const seen = new Set<string>();
+        const links: { href: string; text: string; internal: boolean }[] = [];
+        let m: RegExpExecArray | null;
+        while ((m = linkRe.exec(html)) !== null && links.length < 100) {
+          const rawHref = m[1].trim();
+          let href: string;
+          try { href = new URL(rawHref, url).href; } catch { continue; }
+          if (seen.has(href)) continue;
+          seen.add(href);
+          const internal = href.startsWith(origin);
+          if (internal_only && !internal) continue;
+          const text = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+          links.push({ href, text, internal });
+        }
+        return ok({ total_links: links.length, links });
+      } catch { return err("upstream unavailable"); }
+    }
+  );
+
+  // ── On-chain Intelligence Bundle ──────────────────────────────────────────
+
+  server.tool("onchain-wallet-risk-score", "Risk score 0-100 for an EVM wallet based on transaction history.",
+    { address: z.string() },
+    async ({ address }) => {
+      if (!/^0x[0-9a-f]{40}$/i.test(address)) return err("invalid EVM address");
+      try {
+        const res  = await fetch(`${env.BLOCKSCOUT_BASE_URL}/api?module=account&action=txlist&address=${address}&sort=desc&page=1&offset=100`);
+        const json = await res.json() as { status: string; result?: Record<string, string>[] };
+        if (json.status !== "1" || !Array.isArray(json.result)) return ok({ address, risk_score: 0, risk_level: "unknown", factors: [], tx_count: 0 });
+        const txs = json.result;
+        const failedRatio = txs.length ? txs.filter(tx => tx.isError === "1").length / txs.length : 0;
+        const timestamps  = txs.map(tx => parseInt(tx.timeStamp ?? "0")).sort((a, b) => a - b);
+        let burstCount = 0;
+        for (let i = 1; i < timestamps.length; i++) if (timestamps[i] - timestamps[i - 1] < 5) burstCount++;
+        const burstRatio = timestamps.length > 1 ? burstCount / (timestamps.length - 1) : 0;
+        const score = Math.min(100, Math.round(failedRatio * 60 + burstRatio * 40));
+        const risk_level = score < 20 ? "low" : score < 50 ? "medium" : score < 80 ? "high" : "critical";
+        const factors: string[] = [];
+        if (failedRatio > 0.1) factors.push(`high_failed_tx_ratio:${(failedRatio * 100).toFixed(1)}%`);
+        if (burstRatio > 0.2)  factors.push(`burst_tx_pattern:${(burstRatio * 100).toFixed(1)}%`);
+        return ok({ address, risk_score: score, risk_level, factors, tx_count: txs.length });
+      } catch { return err("upstream unavailable"); }
+    }
+  );
+
+  server.tool("onchain-contract-summary", "Plain-English summary of a smart contract from Blockscout.",
+    { address: z.string() },
+    async ({ address }) => {
+      if (!/^0x[0-9a-f]{40}$/i.test(address)) return err("invalid EVM address");
+      try {
+        const [srcRes, abiRes] = await Promise.all([
+          fetch(`${env.BLOCKSCOUT_BASE_URL}/api?module=contract&action=getsourcecode&address=${address}`),
+          fetch(`${env.BLOCKSCOUT_BASE_URL}/api?module=contract&action=getabi&address=${address}`),
+        ]);
+        const srcJson = await srcRes.json() as { status: string; result?: { ContractName?: string; SourceCode?: string }[] };
+        const abiJson = await abiRes.json() as { status: string; result?: string };
+        const contractName = srcJson.result?.[0]?.ContractName ?? "Unknown";
+        let functions: string[] = [];
+        if (abiJson.status === "1" && abiJson.result) {
+          try {
+            const abi = JSON.parse(abiJson.result) as { type: string; name?: string }[];
+            functions = abi.filter(e => e.type === "function").map(e => e.name ?? "").filter(Boolean);
+          } catch { /* ignore */ }
+        }
+        const content = await llmChat(llm, {
+          temperature: 0.2, maxTokens: 256, jsonOutput: false,
+          messages: [
+            { role: "system", content: "Summarize the smart contract in 2-3 sentences based on its name and functions. Be concise and technical." },
+            { role: "user", content: `Contract: ${contractName}\nFunctions: ${functions.slice(0, 30).join(", ")}` },
+          ],
+        });
+        return ok({ address, name: contractName, summary: content.trim(), functions });
+      } catch { return err("upstream unavailable"); }
+    }
+  );
+
+  server.tool("onchain-tx-classifier", "Classify a Base transaction as swap, bridge, NFT mint, approval, or transfer.",
+    { tx_hash: z.string() },
+    async ({ tx_hash }) => {
+      if (!/^0x[0-9a-f]{64}$/i.test(tx_hash)) return err("invalid transaction hash");
+      try {
+        const rpcRes = await fetch(env.BASE_RPC_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", method: "eth_getTransactionByHash", params: [tx_hash], id: 1 }) });
+        const { result: tx } = await rpcRes.json() as { result: Record<string, string> | null };
+        if (!tx) return err("transaction not found");
+        const input    = tx.input ?? "0x";
+        const selector = input.length >= 10 ? input.slice(0, 10).toLowerCase() : "0x";
+        const SIG_MAP: Record<string, { type: string; protocol: string }> = {
+          "0x7ff36ab5": { type: "swap",          protocol: "UniswapV2"   },
+          "0x38ed1739": { type: "swap",          protocol: "UniswapV2"   },
+          "0x414bf389": { type: "swap",          protocol: "UniswapV3"   },
+          "0xc04b8d59": { type: "swap",          protocol: "UniswapV3"   },
+          "0x56688700": { type: "bridge",        protocol: "BaseBridge"  },
+          "0x1249c58b": { type: "nft_mint",      protocol: ""            },
+          "0x095ea7b3": { type: "token_approval", protocol: ""           },
+          "0xa22cb465": { type: "nft_approval",  protocol: ""            },
+        };
+        const classified = selector === "0x" ? { type: "transfer", protocol: "eth" } : (SIG_MAP[selector] ?? { type: "unknown", protocol: "" });
+        const value_eth  = tx.value ? parseFloat((parseInt(tx.value, 16) / 1e18).toFixed(8)) : 0;
+        return ok({ tx_hash, type: classified.type, protocol: classified.protocol, value_eth, from: tx.from, to: tx.to });
+      } catch { return err("upstream unavailable"); }
+    }
+  );
+
+  server.tool("onchain-token-holders", "Top holders for a token contract with Gini coefficient.",
+    { address: z.string(), limit: z.number().optional().default(20) },
+    async ({ address, limit }) => {
+      if (!/^0x[0-9a-f]{40}$/i.test(address)) return err("invalid EVM address");
+      try {
+        const res  = await fetch(`${env.BLOCKSCOUT_BASE_URL}/api?module=token&action=getTokenHolders&contractaddress=${address}&page=1&offset=${Math.min(limit, 50)}`);
+        const json = await res.json() as { status: string; result?: { address: string; value: string }[] };
+        if (json.status !== "1" || !Array.isArray(json.result)) return ok({ token: address, holder_count: 0, gini_coefficient: 0, top_holders: [] });
+        const holders = json.result;
+        const balances = holders.map(h => parseFloat(h.value ?? "0")).sort((a, b) => a - b);
+        const n = balances.length;
+        let gini = 0;
+        if (n > 1) {
+          const total = balances.reduce((s, v) => s + v, 0);
+          if (total > 0) {
+            let sumDiff = 0;
+            for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) sumDiff += Math.abs(balances[i] - balances[j]);
+            gini = parseFloat((sumDiff / (2 * n * total)).toFixed(4));
+          }
+        }
+        const top_holders = holders.map(h => ({ address: h.address, balance: h.value }));
+        return ok({ token: address, holder_count: holders.length, gini_coefficient: gini, top_holders });
+      } catch { return err("upstream unavailable"); }
+    }
+  );
+
+  // ── Agent Memory Bundle ───────────────────────────────────────────────────
+
+  server.tool("agent-memory-store", "Store a text memory chunk for an agent session with auto-embedding via Qdrant.",
+    { text: z.string(), session_id: z.string(), tags: z.array(z.string()).optional().default([]) },
+    async ({ text, session_id, tags }) => {
+      if (text.length > 4000) return err("text exceeds 4000 character limit");
+      try {
+        const vector = await embed(text);
+        const memory_id = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.floor(Math.random() * 16); return (c === "x" ? r : (r & 0x3) | 0x8).toString(16); });
+        const timestamp  = Date.now();
+        // Ensure collection exists
+        try { await fetch(`${env.QDRANT_URL}/collections/agent_memory`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vectors: { size: 768, distance: "Cosine" } }) }); } catch { /* ignore */ }
+        const pointRes = await fetch(`${env.QDRANT_URL}/collections/agent_memory/points`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ points: [{ id: memory_id, vector, payload: { text, session_id, tags, timestamp } }] }) });
+        if (!pointRes.ok) return err("failed to store memory");
+        return ok({ memory_id, session_id, char_count: text.length, timestamp });
+      } catch { return err("memory store unavailable"); }
+    }
+  );
+
+  server.tool("agent-memory-recall", "Retrieve relevant memories for a query using semantic search in Qdrant.",
+    { query: z.string(), session_id: z.string(), limit: z.number().optional().default(5), threshold: z.number().optional().default(0.5) },
+    async ({ query, session_id, limit, threshold }) => {
+      try {
+        const vector   = await embed(query);
+        const searchRes = await fetch(`${env.QDRANT_URL}/collections/agent_memory/points/search`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vector, limit: Math.min(limit, 20), score_threshold: threshold, with_payload: true, filter: { must: [{ key: "session_id", match: { value: session_id } }] } }) });
+        if (!searchRes.ok) return err("memory search failed");
+        const json = await searchRes.json() as { result?: { id: string; score: number; payload?: { text?: string; tags?: string[]; timestamp?: number } }[] };
+        const results = (json.result ?? []).map(r => ({ memory_id: r.id, score: parseFloat(r.score.toFixed(4)), text: r.payload?.text ?? "", tags: r.payload?.tags ?? [], timestamp: r.payload?.timestamp ?? null }));
+        return ok({ results, count: results.length });
+      } catch { return err("memory store unavailable"); }
+    }
+  );
+
+  server.tool("agent-memory-forget", "Delete a specific memory from an agent session.",
+    { memory_id: z.string(), session_id: z.string() },
+    async ({ memory_id, session_id }) => {
+      try {
+        const getRes = await fetch(`${env.QDRANT_URL}/collections/agent_memory/points/${memory_id}`);
+        if (!getRes.ok) return err("memory not found");
+        const getJson = await getRes.json() as { result?: { payload?: { session_id?: string } } };
+        if (getJson.result?.payload?.session_id !== session_id) return err("memory_id does not belong to this session");
+        const delRes = await fetch(`${env.QDRANT_URL}/collections/agent_memory/points/delete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ points: [memory_id] }) });
+        if (!delRes.ok) return err("failed to delete memory");
+        return ok({ memory_id, deleted: true });
+      } catch { return err("memory store unavailable"); }
+    }
+  );
+
+  server.tool("agent-memory-list", "List all memories stored for an agent session.",
+    { session_id: z.string(), limit: z.number().optional().default(20) },
+    async ({ session_id, limit }) => {
+      try {
+        const scrollRes = await fetch(`${env.QDRANT_URL}/collections/agent_memory/points/scroll`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: Math.min(limit, 50), with_payload: true, with_vector: false, filter: { must: [{ key: "session_id", match: { value: session_id } }] } }) });
+        if (!scrollRes.ok) return err("memory list failed");
+        const json = await scrollRes.json() as { result?: { points?: { id: string; payload?: { text?: string; tags?: string[]; timestamp?: number } }[] } };
+        const memories = (json.result?.points ?? []).map(p => ({ memory_id: p.id, text: (p.payload?.text ?? "").slice(0, 200), tags: p.payload?.tags ?? [], timestamp: p.payload?.timestamp ?? null }));
+        return ok({ memories, count: memories.length });
+      } catch { return err("memory store unavailable"); }
+    }
+  );
+
   return server;
 }
 

@@ -7,8 +7,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 - ETH gas tracker — perlu paid RPC provider (public RPC blok server IP)
-- Web Intelligence category (url-metadata, article-parser, screenshot)
-- Agent Memory category (store, recall, forget, list — Qdrant backend)
+- Web Intelligence: screenshot endpoint (butuh headless browser dep)
+- awesome-mpp + awesome-x402 PR submission
+
+---
+
+## [1.3.0] — 2026-07-15 · P1/P2: 11 Endpoint Baru + Frontend Repositioning
+
+### Added
+- **Web Intelligence** (3 endpoint baru, zero new deps):
+  - `GET /api/v1/web/intelligence/url-metadata` ($0.030) — title, description, OG tags, canonical, favicon
+  - `POST /api/v1/web/intelligence/article-parser` ($0.050) — clean article text, strip ads/nav
+  - `POST /api/v1/web/intelligence/link-extractor` ($0.030) — semua link dengan internal/external classification
+- **On-chain Intelligence** (4 endpoint baru, Blockscout + LLM):
+  - `GET /api/v1/onchain/wallet-risk-score` ($0.060) — risk score 0-100 dari tx history
+  - `GET /api/v1/onchain/contract-summary` ($0.070) — plain-English summary smart contract
+  - `POST /api/v1/onchain/tx-classifier` ($0.040) — klasifikasi tx: swap/bridge/nft_mint/approval/transfer
+  - `GET /api/v1/onchain/token-holders` ($0.050) — top holders + Gini coefficient
+- **Agent Memory** (4 endpoint baru, Qdrant + embeddings):
+  - `POST /api/v1/agent/memory/store` ($0.010) — simpan memory chunk + auto-embedding
+  - `POST /api/v1/agent/memory/recall` ($0.030) — semantic search dalam session
+  - `POST /api/v1/agent/memory/forget` ($0.005) — delete memory by ID
+  - `GET /api/v1/agent/memory/list` ($0.010) — list semua memory per session
+- 11 MCP tools baru (total 30 tools di /api/mcp)
+
+### Changed
+- **Positioning update**: "The one-stop compute API for AI agents." — tagline, meta description, landing page hero, docs subtitle semua konsisten
+- `index.astro`: hero tagline + description diupdate, 3 bundle baru ditambah (total 6), section header → "Six bundles. One interface."
+- `docs.astro`: 11 endpoint baru didokumentasikan, count references diupdate ke 30
+- `pricing.ts`: 11 pricing entries baru
+- `openapi.ts`: 11 path baru + 3 tag baru (Web, Onchain, Memory)
+- `middleware/x402.ts`: BAZAAR + ROUTE_DESCRIPTIONS untuk 11 route, methodForPath diupdate dengan GET_PATHS set
+- `server.ts`: 3 route bundle baru di-register, ROUTE_INPUT_SCHEMAS + BAZAAR_ACCEPT_SCHEMAS diupdate
 
 ---
 
