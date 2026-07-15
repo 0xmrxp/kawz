@@ -31,4 +31,8 @@ jobs:
             sleep 1
             pm2 start infra/ecosystem.config.cjs
             pm2 save
+            sleep 5
+            pm2 logs lobre --lines 40 --nostream || true
+            curl -sf http://localhost:3000/api/health \
+              || { echo "--- HEALTH CHECK FAILED ---"; pm2 status; exit 1; }
             echo "Deploy complete: $(date)"
