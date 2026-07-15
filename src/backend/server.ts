@@ -153,12 +153,11 @@ app.use("*", async (c, next) => {
   }
 });
 
-// Payment middleware — @x402/hono handles EVM x402 (exact scheme, Base USDC),
-// mppx handles Tempo. Dev mode: pass-through unless FORCE_PAYMENT=true.
+// Payment middleware — @x402/hono handles EVM x402 (exact scheme, Base USDC).
+// mppx Tempo disabled pending proper dual-protocol resolution.
+// Dev mode: pass-through unless FORCE_PAYMENT=true.
 app.use("/v1/*", createX402Middleware(env));
-app.use("/v1/*", createMppMiddleware(env));
 app.use("/mcp",  createX402Middleware(env));
-app.use("/mcp",  createMppMiddleware(env));
 
 // Route bundles
 app.route("/v1/trading/engine", trading);
