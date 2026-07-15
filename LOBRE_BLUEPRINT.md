@@ -1111,8 +1111,8 @@ Payments settle in USDC on Base, Solana, or Tempo.
 - [x] **CDP Facilitator auth** — FIXED (v0.9.3-dev). Dua bug `@coinbase/x402 v0.3.0`: (1) missing `"supported"` key di `createCdpAuthHeaders()`, (2) `createAuthHeader()` hardcode `POST` tapi `getSupported()` adalah GET → JWT `uris` claim mismatch. Fix: `buildCdpAuthHeaders()` pakai `generateJwt` dari `@coinbase/cdp-sdk/auth` langsung dengan method yang benar per operasi.
 - [x] HTTPS URL di payment challenge — FIXED: `proxyFetch()` wrapper trust `X-Forwarded-Proto` dari Caddy di `server.ts`
 - [x] 402 response body — FIXED: intercept 402, decode `payment-required` header, isi response body untuk x402 v1 client compat
-- [ ] Setup GitHub Actions SSH deploy (§14.5) — tambah `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` di GitHub Secrets.
-- [ ] Smoke test end-to-end dengan jumlah USDC kecil via `bunx agentcash fetch`.
+- [x] Setup GitHub Actions SSH deploy (§14.5) — `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` aktif. Auto-deploy setiap push ke `main`. Hijau ✓
+- [x] Smoke test end-to-end — EVM x402 payment via AgentCash confirmed. Dua transaksi real berhasil settle di Base mainnet (2026-07-15).
 
 ### **Phase 10 — Registrasi & Go-Live** *(sebagian selesai)*
 - [x] AgentCash discovery `discover https://lobre.lat` → 15 endpoints ditemukan, protokol `[x402, mpp]`, harga benar
@@ -1130,17 +1130,18 @@ Payments settle in USDC on Base, Solana, or Tempo.
 - [x] Harga dinaikkan 10x minimum `$0.030` (dari `$0.002`). Pricing v2: Trading `$0.030–$0.080`, Coding `$0.030–$0.060`, Analysis `$0.030–$0.120`
 - [x] `infra/Caddyfile` — `try_files {path} {path}/index.html /index.html` (fix `/docs` fallback ke landing page)
 - [x] `docs.astro` — copy buttons di system prompt + MCP config, harga terupdate
-- [ ] Caddyfile manual update di VPS: `cp /opt/lobre/infra/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy`
+- [x] Caddyfile manual update di VPS — done.
 - [x] **Bazaar extension validation fix** (v0.9.5-dev) — top-level `extensions.bazaar` dihapus dari route config; `@x402/hono` memvalidasi `{info,schema}` yang tidak ada di BAZAAR_META → server startup error x15 → discovery broken. Fixed.
-- [ ] Rescan di mppscan + x402scan setelah Caddyfile update
-- [ ] CDP Bazaar auto-index pending
+- [x] Rescan di mppscan + x402scan — clean, tidak ada blocking warnings.
+- [x] **CDP Bazaar auto-index triggered** (2026-07-15) — dua transaksi real settled via CDP facilitator (`vitals` + `syntax-heartbeat`). Endpoint akan muncul di Bazaar catalog dalam ~10 menit setelah settlement. Bazaar extension format diupdate ke `declareDiscoveryExtension()` resmi + `output.example` per-route.
+- [x] **KI-002 FIXED** (2026-07-15) — EVM x402 payment dari AgentCash sekarang bekerja. Rollback ke `@x402/hono` + ExactEvmScheme. Mppx dihapus dari chain sementara (lihat §18 KI-002 update).
 - [ ] Monitoring awal: cek margin riil vs proyeksi harga di §4, sesuaikan bila perlu.
 - [ ] Umumkan Lobre ke komunitas `awesome-x402` / `awesome-mpp`.
 - [ ] Daftarkan origin ke x402scan: `https://www.x402scan.com/resources/register`
 - [ ] Daftarkan origin ke mppscan: `https://www.mppscan.com/register`
-- [ ] Verifikasi listing muncul di CDP Bazaar (Bazaar crawler butuh CDP facilitator aktif + `discoverable: true`)
-- [ ] Monitoring awal: cek margin riil vs proyeksi harga di §4, sesuaikan bila perlu.
-- [ ] Umumkan Lobre ke komunitas `awesome-x402` / `awesome-mpp`.
+- [ ] Verifikasi listing muncul di CDP Bazaar catalog dan agentic.market.
+- [ ] Tempo/MPP re-enablement — implementasi pre-gate middleware untuk Tempo sebelum `@x402/hono`.
+- [ ] Error message improvement — response body yang actionable saat payment gagal.
 
 ---
 
@@ -1200,10 +1201,21 @@ Semua scanner (mppscan, x402scan) dan CDP Bazaar crawler membaca dari `payment-r
 
 ### KI-002 — mppx `evm.charge()` x402: "Credential is malformed" dari AgentCash Client
 
-**Status:** Open  
-**Severity:** Medium — EVM x402 payment dari AgentCash/Poncho tidak bisa complete; Tempo MPP masih berfungsi  
-**File terdampak:** `src/backend/middleware/mpp.ts`  
-**Ditemukan:** 15 Juli 2026, saat analisis token SLX menggunakan Lobre + foursec.xyz
+**Status:** FIXED (2026-07-15)  
+**Severity sebelum fix:** Medium — EVM x402 payment dari AgentCash/Poncho tidak bisa complete  
+**File terdampak:** `src/backend/middleware/mpp.ts`, `src/backend/server.ts`  
+**Ditemukan:** 15 Juli 2026
+
+**Fix yang dilakukan:**
+- Rollback `mpp.ts` ke Tempo-only via `mppx/hono` (hapus `evm.charge()` + CDP auth wrapper)
+- Re-register `createX402Middleware` sebelum `createMppMiddleware` di `server.ts`
+- Komplikasi: `@x402/hono` men-strip `X-Payment` header setelah verifikasi → skip-check mppx tidak efektif → mppx tetap return MPP 402 setelah EVM payment berhasil
+- Solusi final: mppx dihapus dari chain (`server.ts`). EVM x402 kini berjalan sempurna
+- Tempo perlu diimplementasikan ulang dengan pre-gate middleware yang independent dari `@x402/hono`
+
+**Konfirmasi:** Dua transaksi real berhasil pada 2026-07-15 (vitals + syntax-heartbeat via AgentCash)
+
+**Ditemukan awal:** 15 Juli 2026, saat analisis token SLX menggunakan Lobre + foursec.xyz
 
 **Gejala:**
 

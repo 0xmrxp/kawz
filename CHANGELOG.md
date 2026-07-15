@@ -6,7 +6,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 ## [Unreleased]
-- CDP Bazaar auto-index pending
+- Tempo/MPP re-enablement (perlu pre-gate middleware sebelum @x402/hono)
+- Error message improvement (actionable hint saat credential gagal)
+- Latency optimization: response caching agresif untuk trading endpoints
+
+---
+
+## [1.0.0] — 2026-07-15 · EVM x402 Payment Working End-to-End + CDP Bazaar Integration
+
+### Fixed
+- **KI-002 RESOLVED** — EVM x402 payment dari AgentCash/Poncho sekarang berfungsi penuh.
+  Root cause: `mppx evm.charge()` mengharapkan credential type `authorization` (EIP-3009)
+  sedangkan AgentCash mengirim `exact` scheme (EIP-712 via `X-Payment` header). Fix: rollback
+  ke arsitektur dual-middleware pre-commit `31fe836` — `@x402/hono` + `ExactEvmScheme` untuk
+  EVM x402, mppx untuk Tempo.
+  Komplikasi tambahan: `@x402/hono` men-strip `X-Payment` header setelah verifikasi, sehingga
+  skip-check mppx tidak efektif. Solusi: mppx dihapus dari chain sementara sampai pre-gate
+  Tempo yang proper dibangun.
+- `middleware/mpp.ts` — revert ke Tempo-only via `mppx/hono`, hapus `evm.charge()` + CDP auth
+  wrapper yang tidak kompatibel dengan AgentCash exact scheme.
+- `server.ts` — re-register `createX402Middleware` sebelum `createMppMiddleware` untuk `/v1/*`
+  dan `/mcp`.
+- `server.ts` — `WELL_KNOWN_X402` facilitator diubah dari `x402.org/facilitator` ke
+  `api.cdp.coinbase.com/platform/v2/x402`. CDP Bazaar hanya mengindex endpoint yang settle
+  lewat CDP facilitator.
+
+### Changed
+- `middleware/x402.ts` — migrasi ke `declareDiscoveryExtension()` resmi dari
+  `@x402/extensions/bazaar`. Hapus `BAZAAR_META` dan field non-standard `category`, `tags`,
+  `discoverable` yang tidak dikenal CDP spec. Tambah `output.example` per-route untuk
+  meningkatkan search quality score di Bazaar catalog.
+- `server.ts` — `BAZAAR_ACCEPT_SCHEMAS` diupdate menggunakan `declareDiscoveryExtension().bazaar`
+  agar konsisten dengan format x402.ts.
+
+### Milestone
+- First real transaction settled via CDP facilitator pada 2026-07-15:
+  `GET /api/v1/trading/engine/vitals` — tx `0xe8491d6c...3156a` ($0.03 USDC, Base mainnet)
+  `POST /api/v1/coding/cache/syntax-heartbeat` — tx `0xf508ecb2...5854` ($0.03 USDC, Base mainnet)
+  CDP Bazaar auto-indexing triggered (~10 menit dari settlement pertama).
 
 ---
 
