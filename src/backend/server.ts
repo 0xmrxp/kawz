@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { loadEnv, type Variables } from "./types";
+import { createX402Middleware } from "./middleware/x402";
 import { createMppMiddleware } from "./middleware/mpp";
-// @x402/hono removed — EVM x402 now handled by mppx evm.charge() in mpp.ts
+import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import trading from "./routes/trading";
 import coding from "./routes/coding";
 import analysis from "./routes/analysis";
@@ -50,33 +51,27 @@ const ROUTE_INPUT_SCHEMAS: Record<string, unknown> = {
   "/api/mcp":                                   { type: "object", required: ["jsonrpc", "method"], properties: { jsonrpc: { type: "string", const: "2.0" }, method: { type: "string" }, params: { type: "object" }, id: { type: "number" } } },
 };
 
-// Bazaar accept schemas — injected into accepts[i].extensions.bazaar in 402 challenge.
-// @x402/hono strips custom fields from Accept items, so we post-process here.
-// Per x402scan DISCOVERY.md: input schema must be at accepts[].extensions.bazaar.{info,schema}.
-// Mirrors BAZAAR_ACCEPT_SCHEMA in x402.ts.
-// schema = JSON Schema describing the info structure (not example data).
-// x402scan reads schema.properties.input.properties.body/queryParams for input schema.
-const _SG    = { type: "object", properties: { input: { type: "object", properties: { type: { type: "string", const: "http" }, method: { type: "string", enum: ["GET","HEAD","DELETE"] } }, required: ["type","method"], additionalProperties: false } }, required: ["input"] };
-const _SGQP  = (qp: unknown) => ({ type: "object", properties: { input: { type: "object", properties: { type: { type: "string", const: "http" }, method: { type: "string", enum: ["GET","HEAD","DELETE"] }, queryParams: { type: "object", properties: qp as Record<string,unknown> } }, required: ["type","method"], additionalProperties: false } }, required: ["input"] });
-const _SP    = (body: unknown, req: string[]) => ({ type: "object", properties: { input: { type: "object", properties: { type: { type: "string", const: "http" }, method: { type: "string", enum: ["POST","PUT","PATCH"] }, bodyType: { type: "string", enum: ["json"] }, body: { type: "object", properties: body as Record<string,unknown>, required: req } }, required: ["type","method","bodyType","body"], additionalProperties: false } }, required: ["input"] });
-
-const BAZAAR_ACCEPT_SCHEMAS: Record<string, { info: unknown; schema: unknown }> = {
-  "/api/v1/trading/engine/vitals":            { info: { input: { type: "http", method: "GET", queryParams: { symbols: "btc,eth" } } },                                                       schema: _SGQP({ symbols: { type: "string", description: "btc, eth or btc,eth. Default: btc,eth" } }) },
-  "/api/v1/trading/engine/orderbook-depth":   { info: { input: { type: "http", method: "GET", queryParams: { pair: "BTC/USDT" } } },                                                        schema: _SGQP({ pair: { type: "string", description: "Trading pair, default BTC/USDT" } }) },
-  "/api/v1/trading/engine/mev-risk-index":    { info: { input: { type: "http", method: "GET" } },                                                                                            schema: _SG },
-  "/api/v1/trading/engine/funding-rates":     { info: { input: { type: "http", method: "GET", queryParams: { symbols: "" } } },                                                              schema: _SGQP({ symbols: { type: "string", description: "Comma-separated: BTC,ETH,SOL. Omit for all." } }) },
-  "/api/v1/trading/engine/whale-tracker":     { info: { input: { type: "http", method: "GET", queryParams: { threshold: 500000 } } },                                                        schema: _SGQP({ threshold: { type: "number", description: "Min USDC transfer USD. Default: 500000" } }) },
-  "/api/v1/coding/cache/dependency-tree":     { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "import { Hono } from 'hono';", filename: "server.ts" } } }, schema: _SP({ code: { type: "string" }, filename: { type: "string" } }, ["code"]) },
-  "/api/v1/coding/cache/token-compressor":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { raw_code: "const x = 1; // comment" } } },                         schema: _SP({ raw_code: { type: "string" } }, ["raw_code"]) },
-  "/api/v1/coding/cache/syntax-heartbeat":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "const x = 1;" } } },                                        schema: _SP({ code: { type: "string" } }, ["code"]) },
-  "/api/v1/coding/cache/refactor-suggest":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "function add(a,b){return a+b}", language: "javascript" } } }, schema: _SP({ code: { type: "string" }, language: { type: "string" } }, ["code"]) },
-  "/api/v1/coding/cache/security-audit":      { info: { input: { type: "http", method: "POST", bodyType: "json", body: { code: "db.query('SELECT * FROM users WHERE id='+req.id)", language: "javascript" } } }, schema: _SP({ code: { type: "string" }, language: { type: "string" } }, ["code"]) },
-  "/api/v1/analysis/memory/heartbeat":        { info: { input: { type: "http", method: "POST", bodyType: "json", body: { text_a: "machine learning", text_b: "deep learning" } } },         schema: _SP({ text_a: { type: "string" }, text_b: { type: "string" } }, ["text_a","text_b"]) },
-  "/api/v1/analysis/memory/entity-extractor": { info: { input: { type: "http", method: "POST", bodyType: "json", body: { text: "Satoshi Nakamoto published Bitcoin in 2008." } } },          schema: _SP({ text: { type: "string" } }, ["text"]) },
-  "/api/v1/analysis/memory/context-ranker":   { info: { input: { type: "http", method: "POST", bodyType: "json", body: { query: "machine learning", chunks: ["deep learning","spreadsheets"] } } }, schema: _SP({ query: { type: "string" }, chunks: { type: "array", items: { type: "string" } } }, ["query","chunks"]) },
-  "/api/v1/analysis/memory/bias-detector":    { info: { input: { type: "http", method: "POST", bodyType: "json", body: { text: "The radical policy will destroy the economy." } } },         schema: _SP({ text: { type: "string" } }, ["text"]) },
-  "/api/v1/analysis/memory/fact-linkage":     { info: { input: { type: "http", method: "POST", bodyType: "json", body: { claim: "The moon landing was faked.", language: "en" } } },         schema: _SP({ claim: { type: "string" }, language: { type: "string" } }, ["claim"]) },
-  "/api/mcp":                                { info: { input: { type: "http", method: "POST", bodyType: "json", body: { jsonrpc: "2.0", method: "tools/call", params: { name: "trading-vitals", arguments: {} }, id: 1 } } }, schema: _SP({ jsonrpc: { type: "string" }, method: { type: "string" }, params: { type: "object" }, id: { type: "number" } }, ["jsonrpc", "method"]) },
+// Bazaar accept schemas — injected into extensions.bazaar in 402 challenge by the
+// post-processing interceptor below. Uses the official declareDiscoveryExtension() from
+// @x402/extensions/bazaar, matching exactly what x402.ts puts in the route config.
+// Extracting .bazaar gives the { info, schema } inner object the interceptor expects.
+const BAZAAR_ACCEPT_SCHEMAS: Record<string, unknown> = {
+  "/api/v1/trading/engine/vitals":            declareDiscoveryExtension({ input: { symbols: "btc,eth" }, inputSchema: { properties: { symbols: { type: "string", description: "Comma-separated: btc, eth, or btc,eth. Default: btc,eth" } } }, output: { example: { btc: { price: 65432, change24h: 2.3, volume24h: 28500000000 }, eth: { price: 3210, change24h: 1.1, volume24h: 14200000000 } } } }).bazaar,
+  "/api/v1/trading/engine/orderbook-depth":   declareDiscoveryExtension({ input: { pair: "BTC/USDT" }, inputSchema: { properties: { pair: { type: "string", description: "Trading pair e.g. BTC/USDT, ETH/USDT. Default: BTC/USDT" } } }, output: { example: { bids: [[65400, 1.2]], asks: [[65420, 0.8]], spread: 20, imbalance: 0.35 } } }).bazaar,
+  "/api/v1/trading/engine/mev-risk-index":    declareDiscoveryExtension({ output: { example: { risk_score: 42, block: 128503241, timestamp: 1752000000000 } } }).bazaar,
+  "/api/v1/trading/engine/funding-rates":     declareDiscoveryExtension({ input: { symbols: "BTC,ETH,SOL" }, inputSchema: { properties: { symbols: { type: "string", description: "Comma-separated: BTC,ETH,SOL. Omit for all." } } }, output: { example: { BTC: { rate: 0.0001, interval_hours: 8 }, ETH: { rate: 0.00005, interval_hours: 8 } } } }).bazaar,
+  "/api/v1/trading/engine/whale-tracker":     declareDiscoveryExtension({ input: { threshold: 500000 }, inputSchema: { properties: { threshold: { type: "number", description: "Min USDC transfer USD. Default: 500000" } } }, output: { example: { transfers: [{ from: "0xabc", to: "0xdef", amount: 1500000, tx: "0x123", block: 128503000 }] } } }).bazaar,
+  "/api/v1/coding/cache/dependency-tree":     declareDiscoveryExtension({ bodyType: "json", input: { code: "import { Hono } from 'hono';", filename: "server.ts" }, inputSchema: { properties: { code: { type: "string" }, filename: { type: "string" } }, required: ["code"] }, output: { example: { nodes: ["server.ts", "hono"], edges: [{ from: "server.ts", to: "hono", type: "import" }] } } }).bazaar,
+  "/api/v1/coding/cache/token-compressor":    declareDiscoveryExtension({ bodyType: "json", input: { raw_code: "const x = 1; // comment" }, inputSchema: { properties: { raw_code: { type: "string", description: "Source code to compress for LLM token efficiency" } }, required: ["raw_code"] }, output: { example: { compressed: "const x=1;", original_tokens: 12, compressed_tokens: 7, ratio: 0.58 } } }).bazaar,
+  "/api/v1/coding/cache/syntax-heartbeat":    declareDiscoveryExtension({ bodyType: "json", input: { code: "const x = 1;" }, inputSchema: { properties: { code: { type: "string", description: "JS/TS/JSX source code to validate syntax" } }, required: ["code"] }, output: { example: { valid: true, errors: [] } } }).bazaar,
+  "/api/v1/coding/cache/refactor-suggest":    declareDiscoveryExtension({ bodyType: "json", input: { code: "function add(a,b){return a+b}", language: "javascript" }, inputSchema: { properties: { code: { type: "string" }, language: { type: "string", description: "javascript or typescript. Default: typescript" } }, required: ["code"] }, output: { example: { suggestions: [{ severity: "low", description: "Add type annotations", line: 1 }] } } }).bazaar,
+  "/api/v1/coding/cache/security-audit":      declareDiscoveryExtension({ bodyType: "json", input: { code: "db.query('SELECT * FROM users WHERE id='+req.id)", language: "javascript" }, inputSchema: { properties: { code: { type: "string" }, language: { type: "string", description: "javascript or typescript" } }, required: ["code"] }, output: { example: { issues: [{ type: "SQL_INJECTION", severity: "high", line: 1, description: "Unsanitized user input in query" }], risk_level: "HIGH" } } }).bazaar,
+  "/api/v1/analysis/memory/heartbeat":        declareDiscoveryExtension({ bodyType: "json", input: { text_a: "machine learning", text_b: "deep learning" }, inputSchema: { properties: { text_a: { type: "string" }, text_b: { type: "string" } }, required: ["text_a","text_b"] }, output: { example: { similarity: 0.87 } } }).bazaar,
+  "/api/v1/analysis/memory/entity-extractor": declareDiscoveryExtension({ bodyType: "json", input: { text: "Satoshi Nakamoto published Bitcoin in 2008." }, inputSchema: { properties: { text: { type: "string", description: "Text to extract named entities from" } }, required: ["text"] }, output: { example: { entities: [{ text: "Satoshi Nakamoto", type: "PERSON" }, { text: "Bitcoin", type: "ORG" }] } } }).bazaar,
+  "/api/v1/analysis/memory/context-ranker":   declareDiscoveryExtension({ bodyType: "json", input: { query: "machine learning", chunks: ["deep learning intro", "spreadsheet tutorial"] }, inputSchema: { properties: { query: { type: "string" }, chunks: { type: "array", items: { type: "string" }, description: "Text chunks to re-rank by relevance" } }, required: ["query","chunks"] }, output: { example: { ranked: [{ text: "deep learning intro", score: 0.91 }] } } }).bazaar,
+  "/api/v1/analysis/memory/bias-detector":    declareDiscoveryExtension({ bodyType: "json", input: { text: "The radical policy will destroy the economy." }, inputSchema: { properties: { text: { type: "string", description: "Text to analyze for framing bias and loaded language" } }, required: ["text"] }, output: { example: { bias_score: 0.78, sentiment: "negative", loaded_words: ["radical", "destroy"] } } }).bazaar,
+  "/api/v1/analysis/memory/fact-linkage":     declareDiscoveryExtension({ bodyType: "json", input: { claim: "The moon landing was faked.", language: "en" }, inputSchema: { properties: { claim: { type: "string" }, language: { type: "string", description: "ISO 639-1 language code. Default: en" } }, required: ["claim"] }, output: { example: { verdict: "false", confidence: 0.97, sources: [{ url: "https://nasa.gov/apollo", excerpt: "..." }] } } }).bazaar,
+  "/api/mcp":                                 declareDiscoveryExtension({ bodyType: "json", input: { jsonrpc: "2.0", method: "tools/call", params: { name: "trading-vitals", arguments: {} }, id: 1 }, inputSchema: { properties: { jsonrpc: { type: "string", description: "JSON-RPC version, must be '2.0'" }, method: { type: "string", description: "MCP method e.g. tools/call, tools/list" }, params: { type: "object" }, id: { type: "number" } }, required: ["jsonrpc","method"] } }).bazaar,
 };
 
 // Populate 402 response body, inject resource.inputSchema + accepts[].extensions.bazaar.
@@ -158,9 +153,11 @@ app.use("*", async (c, next) => {
   }
 });
 
-// Payment middleware — mppx handles both EVM x402 (Base USDC) and Tempo in one pass.
-// Dev mode: pass-through unless FORCE_PAYMENT=true.
+// Payment middleware — @x402/hono handles EVM x402 (exact scheme, Base USDC),
+// mppx handles Tempo. Dev mode: pass-through unless FORCE_PAYMENT=true.
+app.use("/v1/*", createX402Middleware(env));
 app.use("/v1/*", createMppMiddleware(env));
+app.use("/mcp",  createX402Middleware(env));
 app.use("/mcp",  createMppMiddleware(env));
 
 // Route bundles
@@ -180,7 +177,7 @@ const WELL_KNOWN_X402 = JSON.stringify({
   version: 2,
   schemes: ["exact"],
   networks: ["eip155:8453"],
-  facilitator: "https://x402.org/facilitator",
+  facilitator: "https://api.cdp.coinbase.com/platform/v2/x402",
 });
 
 // Rewrite http:// → https:// when Caddy signals the public request was HTTPS.
