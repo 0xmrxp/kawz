@@ -553,7 +553,7 @@ openapi.get("/openapi.json", (c) => {
           }),
         },
       },
-    },
+
       "/v1/trading/engine/gas-tracker": {
         get: {
           operationId: "tradingGasTracker",
