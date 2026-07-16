@@ -5,6 +5,12 @@ lobre.lat {
 		reverse_proxy localhost:3000
 	}
 
+	# x402 discovery manifest — must be proxied to backend (serves CDP production facilitator).
+	# Without this, Caddy serves the static file from dist/ which has the testnet facilitator.
+	handle /.well-known/* {
+		reverse_proxy localhost:3000
+	}
+
 	# API backend — Bun server on port 3000
 	handle /api/* {
 		reverse_proxy localhost:3000
