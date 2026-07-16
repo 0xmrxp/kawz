@@ -62,7 +62,7 @@ async function fetchWalletRisk(blockscoutBaseUrl: string, address: string) {
     `${blockscoutBaseUrl}/api?module=account&action=txlist` +
     `&address=${address}&sort=desc&offset=100&page=1`;
 
-  const res  = await fetch(url, { headers: { Accept: "application/json" } });
+  const res  = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) });
   const json = (await res.json()) as { status: string; result?: Record<string, string>[] };
 
   if (json.status !== "1" || !Array.isArray(json.result)) {
@@ -330,7 +330,10 @@ async function fetchTokenHolders(blockscoutBaseUrl: string, address: string, lim
     `${blockscoutBaseUrl}/api?module=token&action=getTokenHolders` +
     `&contractaddress=${address}&offset=${limit}&page=1`;
 
-  const res  = await fetch(url, { headers: { Accept: "application/json" } });
+  const res  = await fetch(url, {
+    headers: { Accept: "application/json" },
+    signal:  AbortSignal.timeout(12000),  // Blockscout can be slow for large tokens
+  });
   const json = (await res.json()) as {
     status: string;
     result?: { address?: string; value?: string }[];
