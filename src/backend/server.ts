@@ -218,13 +218,23 @@ app.use("*", async (c, next) => {
 });
 
 // Payment middleware — dual-protocol: x402 (EVM) + Tempo (MPP).
-// Pre-gate: EVM clients include X-Payment header → route to @x402/hono.
-// All other requests (Tempo voucher or unauthenticated) → mppx/hono.
-// This prevents @x402/hono from stripping X-Payment before mppx can check it.
+//
+// Routing logic:
+//   Authorization: Payment ...  → mppx/hono  (Tempo voucher)
+//   X-Payment: ...              → @x402/hono (EVM exact scheme)
+//   (no payment headers)        → @x402/hono (issues x402 challenge for discovery)
+//
+// Unauthenticated probes (x402scan, agentcash register) always hit x402 path so they
+// receive the payment-required header and can register the endpoint.
+// X-Payment is gated first to avoid @x402/hono stripping it before mppx sees it.
 const x402 = createX402Middleware(env);
 const mpp  = createMppMiddleware(env);
-app.use("/v1/*", (c, next) => c.req.header("X-Payment") ? x402(c, next) : mpp(c, next));
-app.use("/mcp",  (c, next) => c.req.header("X-Payment") ? x402(c, next) : mpp(c, next));
+const paymentGate = (c: Parameters<typeof x402>[0], next: Parameters<typeof x402>[1]) => {
+  const authz = c.req.header("Authorization") ?? "";
+  return authz.startsWith("Payment ") ? mpp(c, next) : x402(c, next);
+};
+app.use("/v1/*", paymentGate);
+app.use("/mcp",  paymentGate);
 
 // Route bundles
 app.route("/v1/trading/engine", trading);
