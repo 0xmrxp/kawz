@@ -3,10 +3,11 @@
 # OpenAPI: https://lobre.lat/api/openapi.json
 # MCP:     https://lobre.lat/api/mcp
 
-> 19 pay-per-request utility endpoints for autonomous AI agents.
-> Covers trading data, code intelligence, and NLP research.
+> 31 pay-per-request utility endpoints for autonomous AI agents.
+> 6 bundles: trading intelligence, code analysis, NLP research,
+> web intelligence, on-chain analytics, and persistent agent memory.
 > No sign-up. No API keys. Payment is the credential.
-> Settlement: USDC via x402 (on-chain, Base mainnet).
+> Settlement: USDC via x402 (on-chain, Base mainnet) or Tempo (MPP).
 
 ---
 
@@ -24,7 +25,7 @@ Check balance: mcp__agentcash__get_balance
 
 ## System Prompt
 
-Include this in your agent system prompt to access all 19 Lobre endpoints:
+Include this in your agent system prompt to access all 31 Lobre endpoints:
 
 ---BEGIN SYSTEM PROMPT---
 You have access to Lobre (https://lobre.lat) — a pay-per-request utility API for autonomous AI agents.
@@ -36,13 +37,13 @@ WORKFLOW:
 3. mcp__agentcash__fetch(url="<endpoint>", method="GET"|"POST", body={...}) — execute.
 
 TRADING INTELLIGENCE — GET, no body:
-  https://lobre.lat/api/v1/trading/engine/vitals           $0.030  BTC/ETH live price, 24h change, volume — ?symbols=btc,eth (or btc or eth)
+  https://lobre.lat/api/v1/trading/engine/vitals           $0.030  BTC/ETH live price, 24h change, volume — ?symbols=btc,eth
   https://lobre.lat/api/v1/trading/engine/orderbook-depth  $0.050  Bids/asks, spread, imbalance — ?pair=ETH/USDT (default: BTC/USDT)
   https://lobre.lat/api/v1/trading/engine/mev-risk-index   $0.040  MEV sandwich risk score 0–100 for current Base block
-  https://lobre.lat/api/v1/trading/engine/funding-rates    $0.030  BTC/ETH/SOL perpetual futures funding rates — ?symbols=BTC,ETH (omit for all)
-  https://lobre.lat/api/v1/trading/engine/whale-tracker    $0.080  USDC transfers on Base — ?threshold=500000 (min USD, default 500000)
-  https://lobre.lat/api/v1/trading/engine/gas-tracker      $0.020  Gas prices (slow/standard/fast) for ETH, Base, Solana — no params
-  https://lobre.lat/api/v1/trading/engine/token-screener   $0.050  Top movers by price/volume — ?price_change_min=5&volume_change_min=1000000&limit=20
+  https://lobre.lat/api/v1/trading/engine/funding-rates    $0.030  BTC/ETH/SOL perpetual futures funding rates — ?symbols=BTC,ETH
+  https://lobre.lat/api/v1/trading/engine/whale-tracker    $0.080  USDC transfers on Base by category — ?min_amount=10000 (default $10K)
+  https://lobre.lat/api/v1/trading/engine/gas-tracker      $0.020  Gas prices ETH/Base/Solana slow/standard/fast
+  https://lobre.lat/api/v1/trading/engine/token-screener   $0.050  Top movers — ?price_change_min=5&volume_change_min=1000000&limit=20
 
 CODING CACHE — POST, send JSON body:
   https://lobre.lat/api/v1/coding/cache/dependency-tree    $0.030  body: { "code": "...", "filename": "app.ts" }
@@ -60,8 +61,26 @@ RESEARCH PRUNER — POST, send JSON body:
   https://lobre.lat/api/v1/analysis/memory/bias-detector     $0.050  body: { "text": "..." }
   https://lobre.lat/api/v1/analysis/memory/fact-linkage      $0.120  body: { "claim": "...", "language": "en" }
 
+WEB INTELLIGENCE — GET or POST:
+  https://lobre.lat/api/v1/web/intelligence/url-metadata    $0.030  GET — ?url=https://example.com
+  https://lobre.lat/api/v1/web/intelligence/article-parser  $0.050  POST — body: { "url": "..." }
+  https://lobre.lat/api/v1/web/intelligence/link-extractor  $0.030  POST — body: { "url": "...", "internal_only": false }
+  https://lobre.lat/api/v1/web/intelligence/screenshot      $0.080  GET — ?url=https://example.com&width=1280&height=800
+
+ON-CHAIN INTELLIGENCE — GET or POST:
+  https://lobre.lat/api/v1/onchain/wallet-risk-score        $0.060  GET — ?address=0x...
+  https://lobre.lat/api/v1/onchain/contract-summary         $0.070  GET — ?address=0x...
+  https://lobre.lat/api/v1/onchain/tx-classifier            $0.040  POST — body: { "tx_hash": "0x..." }
+  https://lobre.lat/api/v1/onchain/token-holders            $0.050  GET — ?address=0x...&limit=20
+
+AGENT MEMORY — GET or POST (persistent vector memory per session):
+  https://lobre.lat/api/v1/agent/memory/store               $0.010  POST — body: { "text": "...", "session_id": "...", "tags": [] }
+  https://lobre.lat/api/v1/agent/memory/recall              $0.030  POST — body: { "query": "...", "session_id": "...", "limit": 5 }
+  https://lobre.lat/api/v1/agent/memory/forget              $0.005  POST — body: { "memory_id": "...", "session_id": "..." }
+  https://lobre.lat/api/v1/agent/memory/list                $0.010  GET  — ?session_id=...&limit=20
+
 RESPONSE FORMAT:
-  200: { "success": true, "bundle": "trading_engine"|"coding_cache"|"live_vector_pruner", "data": {...} }
+  200: { "success": true, "bundle": "trading_engine"|"coding_cache"|"live_vector_pruner"|"web_intelligence"|"onchain_intelligence"|"agent_memory", "data": {...} }
   402: payment-required header contains base64 x402 v2 JSON — AgentCash handles this automatically.
   503: { "success": false, "error": "upstream unavailable" }
 
@@ -72,7 +91,7 @@ IMPORTANT: Use mcp__agentcash__fetch for all calls. Do not invent tool names lik
 
 ## MCP Integration
 
-Lobre exposes all 19 endpoints as MCP tools via Streamable HTTP Transport.
+Lobre exposes all 31 endpoints as MCP tools via Streamable HTTP Transport.
 Add to Claude Desktop config (~/.claude/claude_desktop_config.json):
 
 {
@@ -85,7 +104,7 @@ Add to Claude Desktop config (~/.claude/claude_desktop_config.json):
 }
 
 MCP server direct URL: https://lobre.lat/api/mcp
-All 19 tools mirror the REST endpoints. AgentCash handles payment via MCP automatically.
+All 31 tools mirror the REST endpoints. AgentCash handles payment via MCP automatically.
 Note: /api/mcp requires x402 payment ($0.030 per request).
 
 ---
@@ -120,8 +139,10 @@ GET  /api/v1/trading/engine/funding-rates
 
 GET  /api/v1/trading/engine/whale-tracker
   price:  $0.080
-  desc:   Recent large USDC transfers on Base. On-chain data.
-  params: ?threshold=500000 (optional, min USD amount, default 500000, min 10000)
+  desc:   USDC transfers on Base categorized by size: Micro Whale ($10K–$99K),
+          Mid Whale ($100K–$999K), Whale ($1M–$9.9M), Mega Whale (>=$10M).
+          Each transfer includes from/to address, amount_formatted, token info, category.
+  params: ?min_amount=10000 (optional, floor in USD, default $10K, min $1K)
   cache:  60s
 
 GET  /api/v1/trading/engine/gas-tracker
@@ -209,12 +230,86 @@ POST /api/v1/analysis/memory/fact-linkage
   desc:  Verify claim via fact-check database lookup with LLM fallback.
          Returns assessment: likely_true|likely_false|misleading|unverifiable.
 
+### Bundle 4 — Web Intelligence (from $0.030)
+
+GET  /api/v1/web/intelligence/url-metadata
+  price:  $0.030
+  params: ?url=https://example.com (required)
+  desc:   Extract title, description, OG tags, canonical URL, and favicon.
+
+POST /api/v1/web/intelligence/article-parser
+  price: $0.050
+  body:  { "url": string }
+  desc:  Fetch URL and return clean article text — scripts, ads, nav stripped.
+         Returns title, text, char_count.
+
+POST /api/v1/web/intelligence/link-extractor
+  price: $0.030
+  body:  { "url": string, "internal_only"?: boolean }
+  desc:  Extract all links with text context and internal/external classification.
+         Returns total_links, internal_count, external_count, links[].
+
+GET  /api/v1/web/intelligence/screenshot
+  price:  $0.080
+  params: ?url=https://example.com&width=1280&height=800
+  desc:   Full-page screenshot as base64 PNG. Renders JavaScript.
+
+### Bundle 5 — On-chain Intelligence (from $0.040)
+
+GET  /api/v1/onchain/wallet-risk-score
+  price:  $0.060
+  params: ?address=0x... (required, EVM wallet)
+  desc:   Risk score 0–100 based on transaction history and behavior patterns.
+          Returns risk_level: none|low|medium|high|critical.
+
+GET  /api/v1/onchain/contract-summary
+  price:  $0.070
+  params: ?address=0x... (required, smart contract)
+  desc:   Plain-English summary of a smart contract using ABI + source from Blockscout.
+          Returns name, summary, functions[].
+
+POST /api/v1/onchain/tx-classifier
+  price: $0.040
+  body:  { "tx_hash": string }
+  desc:  Classify transaction: swap|bridge|nft_mint|approval|transfer.
+         Returns type, protocol, value_eth, from, to.
+
+GET  /api/v1/onchain/token-holders
+  price:  $0.050
+  params: ?address=0x...&limit=20 (address required, token contract)
+  desc:   Top holders with share percentage and Gini coefficient for concentration analysis.
+
+### Bundle 6 — Agent Memory (from $0.005)
+
+POST /api/v1/agent/memory/store
+  price: $0.010
+  body:  { "text": string, "session_id": string, "tags"?: string[] }
+  desc:  Store a text memory chunk with auto-embedding. Returns memory_id (UUID).
+         Max 4000 chars per chunk. Use session_id to namespace memories per agent.
+
+POST /api/v1/agent/memory/recall
+  price: $0.030
+  body:  { "query": string, "session_id": string, "limit"?: number, "threshold"?: number }
+  desc:  Retrieve most relevant memories for a query using semantic search.
+         Returns ranked results with score and text. Default limit: 5, threshold: 0.5.
+
+POST /api/v1/agent/memory/forget
+  price: $0.005
+  body:  { "memory_id": string, "session_id": string }
+  desc:  Delete a specific memory by ID. Session ownership is verified before deletion.
+
+GET  /api/v1/agent/memory/list
+  price:  $0.010
+  params: ?session_id=...&limit=20
+  desc:   List all stored memories for a session, sorted by recency.
+
 ---
 
 ## Payment Protocol
 
 x402  on-chain per-request, Base mainnet, USDC (eip155:8453)
       Challenge: payment-required header, base64 JSON, x402Version: 2
+MPP   Tempo session-based, off-chain voucher, Authorization: Payment header
 
 ---
 
@@ -226,3 +321,4 @@ x402  on-chain per-request, Base mainnet, USDC (eip155:8453)
 - Successful responses always include: { success: true, bundle: "...", data: {...} }
 - 503 means an upstream data source is temporarily unavailable — retry is safe.
 - Short-TTL caching prevents redundant upstream calls. Fresh data on every cache miss.
+- Agent Memory uses Qdrant vector DB. First call may be slower (model warm-up). Use consistent session_id per agent run.

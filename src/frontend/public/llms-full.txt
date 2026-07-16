@@ -1,15 +1,16 @@
 # Lobre — Agentic Infrastructure Engine
 
 > Pay-per-request utility infrastructure for autonomous AI agents.
-> 19 endpoints across 3 bundles: trading data, code intelligence, NLP research.
+> 31 endpoints across 6 bundles: trading intelligence, code analysis, NLP research,
+> web intelligence, on-chain analytics, and persistent agent memory.
 > No sign-up. No API keys. Payment is the credential.
-> Settlement: USDC via x402 (on-chain, Base mainnet).
+> Settlement: USDC via x402 (on-chain, Base mainnet) or Tempo (MPP).
 
 ## Onboarding
 
 - [Onboard](https://lobre.lat/docs): Set up AgentCash wallet and add Lobre
 - [OpenAPI spec](https://lobre.lat/api/openapi.json): Machine-readable contract with payment info
-- [MCP server](https://lobre.lat/api/mcp): All 19 tools via Streamable HTTP Transport
+- [MCP server](https://lobre.lat/api/mcp): All 31 tools via Streamable HTTP Transport
 
 ## Trading Intelligence Endpoints
 
@@ -17,7 +18,7 @@
 - [GET orderbook-depth](https://lobre.lat/api/v1/trading/engine/orderbook-depth): Orderbook bids/asks, spread, imbalance (?pair=) — $0.050
 - [GET mev-risk-index](https://lobre.lat/api/v1/trading/engine/mev-risk-index): MEV sandwich attack risk score 0–100 for current Base block — $0.040
 - [GET funding-rates](https://lobre.lat/api/v1/trading/engine/funding-rates): BTC/ETH/SOL perpetual futures funding rates (?symbols=) — $0.030
-- [GET whale-tracker](https://lobre.lat/api/v1/trading/engine/whale-tracker): USDC transfers on Base above threshold (?threshold=) — $0.080
+- [GET whale-tracker](https://lobre.lat/api/v1/trading/engine/whale-tracker): USDC transfers categorized by size (?min_amount=10000) — $0.080
 - [GET gas-tracker](https://lobre.lat/api/v1/trading/engine/gas-tracker): Gas prices (slow/standard/fast) for ETH, Base, Solana — $0.020
 - [GET token-screener](https://lobre.lat/api/v1/trading/engine/token-screener): Top token movers by price change and volume — $0.050
 
@@ -39,17 +40,38 @@
 - [POST bias-detector](https://lobre.lat/api/v1/analysis/memory/bias-detector): Detect framing bias, sentiment slant, loaded language — $0.050
 - [POST fact-linkage](https://lobre.lat/api/v1/analysis/memory/fact-linkage): Verify claims via fact-check database with LLM fallback — $0.120
 
+## Web Intelligence Endpoints
+
+- [GET url-metadata](https://lobre.lat/api/v1/web/intelligence/url-metadata): Title, OG tags, canonical, favicon from any URL — $0.030
+- [POST article-parser](https://lobre.lat/api/v1/web/intelligence/article-parser): Clean article text with ads/nav stripped — $0.050
+- [POST link-extractor](https://lobre.lat/api/v1/web/intelligence/link-extractor): All links with internal/external classification — $0.030
+- [GET screenshot](https://lobre.lat/api/v1/web/intelligence/screenshot): Full-page screenshot as base64 PNG — $0.080
+
+## On-chain Intelligence Endpoints
+
+- [GET wallet-risk-score](https://lobre.lat/api/v1/onchain/wallet-risk-score): Risk score 0–100 for an EVM wallet — $0.060
+- [GET contract-summary](https://lobre.lat/api/v1/onchain/contract-summary): Plain-English summary of a smart contract — $0.070
+- [POST tx-classifier](https://lobre.lat/api/v1/onchain/tx-classifier): Classify tx as swap/bridge/nft_mint/approval/transfer — $0.040
+- [GET token-holders](https://lobre.lat/api/v1/onchain/token-holders): Top holders + Gini coefficient for concentration — $0.050
+
+## Agent Memory Endpoints
+
+- [POST store](https://lobre.lat/api/v1/agent/memory/store): Store memory chunk with auto-embedding — $0.010
+- [POST recall](https://lobre.lat/api/v1/agent/memory/recall): Retrieve relevant memories via semantic search — $0.030
+- [POST forget](https://lobre.lat/api/v1/agent/memory/forget): Delete a memory by ID — $0.005
+- [GET list](https://lobre.lat/api/v1/agent/memory/list): List all memories for a session — $0.010
+
 ---
 
 # GET /api/v1/trading/engine/vitals
 URL: https://lobre.lat/api/v1/trading/engine/vitals
 
-Live BTC and ETH market vitals. Cached 10 seconds.
+Live BTC and ETH market vitals from Binance (CoinGecko fallback). Cached 10 seconds.
 
 Price: $0.030 USDC
 Method: GET
-Request: Optional query param ?symbols=btc,eth (default: btc,eth — use "btc", "eth", or "btc,eth" to filter)
-Response: { "success": true, "bundle": "trading_engine", "data": { "btc"?: { "price_usd": number, "change_24h_pct": number, "high_24h": number, "low_24h": number, "volume_24h": number }, "eth"?: { "price_usd": number, "change_24h_pct": number, "volume_24h": number }, "timestamp": number } }
+Request: Optional ?symbols=btc,eth (default: btc,eth — use "btc", "eth", or "btc,eth")
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": string, "btc"?: { "price_usd": number, "change_24h_pct": number, "high_24h": number, "low_24h": number, "volume_24h": number }, "eth"?: { "price_usd": number, "change_24h_pct": number, "volume_24h": number }, "timestamp": number } }
 
 ---
 
@@ -60,7 +82,7 @@ Orderbook bids/asks for a trading pair. Returns spread (USD and %), top-10 depth
 
 Price: $0.050 USDC
 Method: GET
-Request: Optional query param ?pair=ETH/USDT (default: BTC/USDT)
+Request: Optional ?pair=ETH/USDT (default: BTC/USDT)
 Response: { "success": true, "bundle": "trading_engine", "data": { "pair": string, "best_bid": number, "best_ask": number, "spread_usd": number, "spread_pct": number, "bid_depth_top10": number, "ask_depth_top10": number, "imbalance": number, "bids": [[price, qty], ...], "asks": [[price, qty], ...], "timestamp": number } }
 
 ---
@@ -72,32 +94,34 @@ MEV sandwich attack risk score (0–100) for the current Base mainnet block. Cac
 
 Price: $0.040 USDC
 Method: GET
-Request: No body required.
-Response: { "success": true, "bundle": "trading_engine", "data": { "risk_score": number, "risk_level": "low"|"medium"|"high"|"critical", "block_number": number, "total_txs": number, "high_gas_ratio_pct": number, "timestamp": number } }
+Request: No params.
+Response: { "success": true, "bundle": "trading_engine", "data": { "risk_score": number, "risk_level": "low"|"medium"|"high"|"critical", "block_number": number, "total_txs": number, "high_gas_txs": number, "high_gas_ratio_pct": number, "max_same_sender_txs": number, "timestamp": number } }
 
 ---
 
 # GET /api/v1/trading/engine/funding-rates
 URL: https://lobre.lat/api/v1/trading/engine/funding-rates
 
-Perpetual futures funding rates for BTC, ETH, and SOL. Includes annualized rate and next funding timestamp. Cached 15 seconds.
+Perpetual futures funding rates for BTC, ETH, and SOL from Binance Futures. Includes annualized rate and next funding timestamp. Cached 15 seconds.
 
 Price: $0.030 USDC
 Method: GET
-Request: Optional query param ?symbols=BTC,ETH (default: all — BTC,ETH,SOL. Comma-separated filter.)
-Response: { "success": true, "bundle": "trading_engine", "data": { "rates": [{ "symbol": string, "funding_rate": number, "rate_pct": string, "annualized_pct": number, "next_funding_ms": number, "mark_price": number }], "btc_annualized_pct": number, "timestamp": number } }
+Request: Optional ?symbols=BTC,ETH (default: all — BTC,ETH,SOL)
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": "binance_futures", "rates": [{ "symbol": string, "funding_rate": number, "rate_pct": string, "annualized_pct": number, "next_funding_ms": number, "mark_price": number, "index_price": number }], "btc_annualized_pct": number, "timestamp": number } }
 
 ---
 
 # GET /api/v1/trading/engine/whale-tracker
 URL: https://lobre.lat/api/v1/trading/engine/whale-tracker
 
-Recent large USDC transfers on Base mainnet above the configured threshold. On-chain data. Returns up to 25 most recent transfers. Cached 60 seconds.
+USDC transfers on Base mainnet categorized by size. Cached 60 seconds.
+Categories: Micro Whale ($10K–$99K), Mid Whale ($100K–$999K), Whale ($1M–$9.9M), Mega Whale (>=$10M).
 
 Price: $0.080 USDC
 Method: GET
-Request: Optional query param ?threshold=500000 (default: 500000, minimum: 10000)
-Response: { "success": true, "bundle": "trading_engine", "data": { "large_transfers": [{ "hash": string, "from": string, "to": string, "amount_usdc": number, "block_number": number, "age_seconds": number }], "total_found": number, "threshold_usd": number, "timestamp": number } }
+Request: Optional ?min_amount=10000 (floor in USD, default $10K, min $1K)
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": "blockscout_base", "categories": { "mega": { "label": "Mega Whale", "range": ">= $10M", "count": number, "transfers": [Transfer] }, "whale": { "label": "Whale", "range": "$1M – $9.9M", "count": number, "transfers": [Transfer] }, "mid": { "label": "Mid Whale", "range": "$100K – $999K", "count": number, "transfers": [Transfer] }, "micro": { "label": "Micro Whale", "range": "$10K – $99K", "count": number, "transfers": [Transfer] } }, "total": number, "min_tracked_usd": number, "timestamp": number } }
+Transfer: { "hash": string, "from": string, "to": string, "amount": number, "amount_formatted": string, "token": { "symbol": string, "name": string, "contract": string, "decimals": number }, "block_number": number, "age_seconds": number, "category": string }
 
 ---
 
@@ -108,7 +132,7 @@ Current gas prices for ETH, Base, and Solana — slow, standard, and fast tiers.
 
 Price: $0.020 USDC
 Method: GET
-Request: No body required.
+Request: No params.
 Response: { "success": true, "bundle": "trading_engine", "data": { "base": { "slow": number, "standard": number, "fast": number, "base_fee": number, "unit": "gwei" }|null, "eth": { "slow": number, "standard": number, "fast": number, "base_fee": number, "unit": "gwei" }|null, "solana": { "low": number, "medium": number, "high": number, "unit": "microlamports" }|null, "timestamp": number } }
 
 ---
@@ -120,19 +144,19 @@ Scan tokens by 24h price change and volume threshold. Returns top movers sorted 
 
 Price: $0.050 USDC
 Method: GET
-Request: Optional query params ?price_change_min=5&volume_change_min=1000000&limit=20
-Response: { "success": true, "bundle": "trading_engine", "data": { "screened": [{ "symbol": string, "name": string, "price": number, "change_24h_pct": number, "direction": "up"|"down", "volume_24h_usd": number, "high_24h": number, "low_24h": number, "market_cap": number }], "count": number, "filters": { "price_change_min_pct": number, "volume_24h_min_usd": number }, "timestamp": number } }
+Request: Optional ?price_change_min=5&volume_change_min=1000000&limit=20
+Response: { "success": true, "bundle": "trading_engine", "data": { "source": "coingecko", "screened": [{ "symbol": string, "name": string, "price": number, "change_24h_pct": number, "direction": "up"|"down", "volume_24h_usd": number, "high_24h": number, "low_24h": number, "market_cap": number }], "count": number, "filters": { "price_change_min_pct": number, "volume_24h_min_usd": number }, "timestamp": number } }
 
 ---
 
 # POST /api/v1/coding/cache/dependency-tree
 URL: https://lobre.lat/api/v1/coding/cache/dependency-tree
 
-Parse static import and export dependency graph from JavaScript or TypeScript source code. Supports TypeScript, JSX, and ES modules.
+Parse static import and export dependency graph from JavaScript or TypeScript source code.
 
 Price: $0.030 USDC
 Method: POST
-Request body: { "code": string (required), "filename": string (optional, e.g. "server.ts") }
+Request body: { "code": string (required), "filename": string (optional) }
 Response: { "success": true, "bundle": "coding_cache", "data": { "imports": string[], "exports": string[], "depth": number } }
 
 ---
@@ -140,7 +164,7 @@ Response: { "success": true, "bundle": "coding_cache", "data": { "imports": stri
 # POST /api/v1/coding/cache/token-compressor
 URL: https://lobre.lat/api/v1/coding/cache/token-compressor
 
-Strip comments (single-line and multi-line) and collapse whitespace from source code to minimize LLM token usage.
+Strip comments and collapse whitespace from source code to minimize LLM token usage.
 
 Price: $0.030 USDC
 Method: POST
@@ -152,7 +176,7 @@ Response: { "success": true, "bundle": "coding_cache", "data": { "compressed": s
 # POST /api/v1/coding/cache/syntax-heartbeat
 URL: https://lobre.lat/api/v1/coding/cache/syntax-heartbeat
 
-Validate JavaScript, TypeScript, or JSX syntax. Returns parse errors with position hints and line count.
+Validate JavaScript, TypeScript, or JSX syntax. Returns parse errors with position hints.
 
 Price: $0.030 USDC
 Method: POST
@@ -164,7 +188,7 @@ Response: { "success": true, "bundle": "coding_cache", "data": { "valid": boolea
 # POST /api/v1/coding/cache/refactor-suggest
 URL: https://lobre.lat/api/v1/coding/cache/refactor-suggest
 
-AI-powered code review providing refactoring suggestions with severity ratings and overall quality score.
+AI-powered refactoring suggestions with severity ratings and overall quality score.
 
 Price: $0.050 USDC
 Method: POST
@@ -176,7 +200,7 @@ Response: { "success": true, "bundle": "coding_cache", "data": { "suggestions": 
 # POST /api/v1/coding/cache/security-audit
 URL: https://lobre.lat/api/v1/coding/cache/security-audit
 
-AI-powered static security audit detecting SQL injection, XSS, insecure eval, hardcoded secrets, and other vulnerability patterns. Returns risk score 0–100 and severity-rated findings.
+AI-powered static security audit: SQL injection, XSS, insecure eval, hardcoded secrets, and other vulnerability patterns.
 
 Price: $0.060 USDC
 Method: POST
@@ -188,7 +212,7 @@ Response: { "success": true, "bundle": "coding_cache", "data": { "vulnerabilitie
 # POST /api/v1/coding/cache/secret-scanner
 URL: https://lobre.lat/api/v1/coding/cache/secret-scanner
 
-Detect hardcoded secrets in source code using pattern matching — API keys, private keys, passwords, and tokens across 16+ types.
+Detect hardcoded secrets using pattern matching — 16+ types including API keys, private keys, passwords, tokens.
 
 Price: $0.040 USDC
 Method: POST
@@ -200,7 +224,7 @@ Response: { "success": true, "bundle": "coding_cache", "data": { "secrets_found"
 # POST /api/v1/analysis/memory/sentiment
 URL: https://lobre.lat/api/v1/analysis/memory/sentiment
 
-Classify text sentiment as positive, negative, or neutral with confidence score and dominant emotion.
+Classify text sentiment with confidence score and dominant emotion.
 
 Price: $0.030 USDC
 Method: POST
@@ -212,7 +236,7 @@ Response: { "success": true, "bundle": "live_vector_pruner", "data": { "sentimen
 # POST /api/v1/analysis/memory/heartbeat
 URL: https://lobre.lat/api/v1/analysis/memory/heartbeat
 
-Compute cosine similarity between two texts using high-dimensional sentence embeddings. Runs on-device. Includes human-readable interpretation.
+Cosine similarity between two texts using sentence embeddings. Runs on-device.
 
 Price: $0.030 USDC
 Method: POST
@@ -224,7 +248,7 @@ Response: { "success": true, "bundle": "live_vector_pruner", "data": { "similari
 # POST /api/v1/analysis/memory/entity-extractor
 URL: https://lobre.lat/api/v1/analysis/memory/entity-extractor
 
-Extract named entities from unstructured text. Entity types: PERSON, ORG, LOC, DATE, MONEY, PRODUCT, OTHER. Each entity includes confidence level.
+Extract named entities: PERSON, ORG, LOC, DATE, MONEY, PRODUCT, OTHER. Each entity includes confidence level.
 
 Price: $0.060 USDC
 Method: POST
@@ -240,7 +264,7 @@ Re-rank a list of text chunks by semantic relevance to a query. Returns chunks s
 
 Price: $0.050 USDC
 Method: POST
-Request body: { "query": string (required), "chunks": string[] (required, non-empty array) }
+Request body: { "query": string (required), "chunks": string[] (required, non-empty) }
 Response: { "success": true, "bundle": "live_vector_pruner", "data": { "ranked": [{ "index": number, "chunk": string, "score": number }], "query_vector_dims": number, "timestamp": number } }
 
 ---
@@ -248,7 +272,7 @@ Response: { "success": true, "bundle": "live_vector_pruner", "data": { "ranked":
 # POST /api/v1/analysis/memory/bias-detector
 URL: https://lobre.lat/api/v1/analysis/memory/bias-detector
 
-Detect framing bias, sentiment slant, and loaded language in text. Returns bias types detected, specific examples, and overall bias score 0–100.
+Detect framing bias, sentiment slant, and loaded language in text. Returns bias types, examples, and score 0–100.
 
 Price: $0.050 USDC
 Method: POST
@@ -260,10 +284,154 @@ Response: { "success": true, "bundle": "live_vector_pruner", "data": { "bias_det
 # POST /api/v1/analysis/memory/fact-linkage
 URL: https://lobre.lat/api/v1/analysis/memory/fact-linkage
 
-Verify a claim against fact-check databases. Falls back to AI analysis for claims not yet reviewed by human fact-checkers.
+Verify a claim against fact-check databases. Falls back to LLM analysis for claims not yet reviewed by human fact-checkers.
 
 Price: $0.120 USDC
 Method: POST
 Request body: { "claim": string (required, max ~512 chars), "language": string (optional, default: "en") }
-Response (fact_check_db source): { "success": true, "bundle": "live_vector_pruner", "data": { "source": "fact_check_db", "claims": [{ "claim_text": string, "claimant": string, "reviews": [{ "publisher": string, "url": string, "rating": string }] }], "verified": number, "timestamp": number } }
-Response (ai source): { "success": true, "bundle": "live_vector_pruner", "data": { "source": "ai", "assessment": "likely_true"|"likely_false"|"misleading"|"unverifiable", "confidence": "low"|"medium"|"high", "reasoning": string, "timestamp": number } }
+Response (google_factcheck source): { "success": true, "bundle": "live_vector_pruner", "data": { "source": "google_factcheck", "claims": [{ "claim_text": string, "claimant": string, "reviews": [{ "publisher": string, "url": string, "rating": string }] }], "verified": number, "unverified": number, "timestamp": number } }
+Response (llm source): { "success": true, "bundle": "live_vector_pruner", "data": { "source": "llm", "assessment": "likely_true"|"likely_false"|"misleading"|"unverifiable", "confidence": "low"|"medium"|"high", "reasoning": string, "caveats": string, "sources_note": string, "timestamp": number } }
+
+---
+
+# GET /api/v1/web/intelligence/url-metadata
+URL: https://lobre.lat/api/v1/web/intelligence/url-metadata
+
+Extract title, description, OG tags, canonical URL, and favicon from any web page.
+
+Price: $0.030 USDC
+Method: GET
+Request: Required ?url=https://example.com
+Response: { "success": true, "bundle": "web_intelligence", "data": { "url": string, "title": string|null, "description": string|null, "og_title": string|null, "og_image": string|null, "og_type": string|null, "canonical": string|null, "favicon": string|null, "timestamp": number } }
+
+---
+
+# POST /api/v1/web/intelligence/article-parser
+URL: https://lobre.lat/api/v1/web/intelligence/article-parser
+
+Fetch a URL and return clean article text — scripts, ads, and nav stripped.
+
+Price: $0.050 USDC
+Method: POST
+Request body: { "url": string (required) }
+Response: { "success": true, "bundle": "web_intelligence", "data": { "url": string, "title": string|null, "text": string, "char_count": number, "timestamp": number } }
+
+---
+
+# POST /api/v1/web/intelligence/link-extractor
+URL: https://lobre.lat/api/v1/web/intelligence/link-extractor
+
+Extract all links from a web page with text context and internal/external classification.
+
+Price: $0.030 USDC
+Method: POST
+Request body: { "url": string (required), "internal_only": boolean (optional, default: false) }
+Response: { "success": true, "bundle": "web_intelligence", "data": { "url": string, "total_links": number, "internal_count": number, "external_count": number, "links": [{ "href": string, "text": string, "internal": boolean }], "timestamp": number } }
+
+---
+
+# GET /api/v1/web/intelligence/screenshot
+URL: https://lobre.lat/api/v1/web/intelligence/screenshot
+
+Full-page screenshot of any URL as base64 PNG. Renders JavaScript. Configurable viewport.
+
+Price: $0.080 USDC
+Method: GET
+Request: Required ?url=https://example.com — Optional ?width=1280&height=800
+Response: { "success": true, "bundle": "web_intelligence", "data": { "url": string, "screenshot_base64": string, "format": "png", "viewport": { "width": number, "height": number }, "timestamp": number } }
+
+---
+
+# GET /api/v1/onchain/wallet-risk-score
+URL: https://lobre.lat/api/v1/onchain/wallet-risk-score
+
+Risk score 0–100 for an EVM wallet based on transaction history and behavior patterns.
+
+Price: $0.060 USDC
+Method: GET
+Request: Required ?address=0x... (EVM wallet address)
+Response: { "success": true, "bundle": "onchain_intelligence", "data": { "address": string, "risk_score": number, "risk_level": "none"|"low"|"medium"|"high"|"critical"|"unknown", "factors": string[], "tx_count": number, "timestamp": number } }
+
+---
+
+# GET /api/v1/onchain/contract-summary
+URL: https://lobre.lat/api/v1/onchain/contract-summary
+
+Plain-English summary of a smart contract using ABI and source code from Blockscout.
+
+Price: $0.070 USDC
+Method: GET
+Request: Required ?address=0x... (smart contract address)
+Response: { "success": true, "bundle": "onchain_intelligence", "data": { "address": string, "name": string, "summary": string, "functions": string[], "timestamp": number } }
+
+---
+
+# POST /api/v1/onchain/tx-classifier
+URL: https://lobre.lat/api/v1/onchain/tx-classifier
+
+Classify a transaction as swap, bridge, NFT mint, approval, or transfer by input signature.
+
+Price: $0.040 USDC
+Method: POST
+Request body: { "tx_hash": string (required, 0x + 64 hex chars) }
+Response: { "success": true, "bundle": "onchain_intelligence", "data": { "tx_hash": string, "type": "swap"|"bridge"|"nft_mint"|"approval"|"transfer", "protocol": string|null, "value_eth": number|null, "from": string, "to": string, "timestamp": number } }
+
+---
+
+# GET /api/v1/onchain/token-holders
+URL: https://lobre.lat/api/v1/onchain/token-holders
+
+Top holders for a token contract with share percentage and Gini coefficient for concentration analysis.
+
+Price: $0.050 USDC
+Method: GET
+Request: Required ?address=0x... (token contract) — Optional ?limit=20 (5–50)
+Response: { "success": true, "bundle": "onchain_intelligence", "data": { "token": string, "holder_count": number, "gini_coefficient": number, "top_holders": [{ "address": string, "quantity": string, "share_pct": number }], "timestamp": number } }
+
+---
+
+# POST /api/v1/agent/memory/store
+URL: https://lobre.lat/api/v1/agent/memory/store
+
+Store a text memory chunk for an agent session with auto-embedding. Use consistent session_id per agent run.
+
+Price: $0.010 USDC
+Method: POST
+Request body: { "text": string (required, max 4000 chars), "session_id": string (required), "tags": string[] (optional) }
+Response: { "success": true, "bundle": "agent_memory", "data": { "memory_id": string, "session_id": string, "char_count": number, "timestamp": string } }
+
+---
+
+# POST /api/v1/agent/memory/recall
+URL: https://lobre.lat/api/v1/agent/memory/recall
+
+Retrieve the most relevant memories for a query within a session using semantic search.
+
+Price: $0.030 USDC
+Method: POST
+Request body: { "query": string (required), "session_id": string (required), "limit": number (optional, 1–20, default 5), "threshold": number (optional, 0–1, default 0.5) }
+Response: { "success": true, "bundle": "agent_memory", "data": { "session_id": string, "query": string, "results": [{ "memory_id": string, "score": number, "text": string, "tags": string[], "timestamp": string }], "count": number } }
+
+---
+
+# POST /api/v1/agent/memory/forget
+URL: https://lobre.lat/api/v1/agent/memory/forget
+
+Delete a specific memory by ID. Session ownership is verified before deletion.
+
+Price: $0.005 USDC
+Method: POST
+Request body: { "memory_id": string (required), "session_id": string (required) }
+Response: { "success": true, "bundle": "agent_memory", "data": { "memory_id": string, "deleted": true } }
+
+---
+
+# GET /api/v1/agent/memory/list
+URL: https://lobre.lat/api/v1/agent/memory/list
+
+List all stored memories for an agent session, sorted by recency.
+
+Price: $0.010 USDC
+Method: GET
+Request: Required ?session_id=... — Optional ?limit=20 (1–100)
+Response: { "success": true, "bundle": "agent_memory", "data": { "session_id": string, "memories": [{ "memory_id": string, "text": string, "tags": string[], "char_count": number, "timestamp": string }], "count": number } }
