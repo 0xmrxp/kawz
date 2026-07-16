@@ -200,18 +200,35 @@ async function fetchFundingRates() {
 }
 
 // ─── /whale-tracker ──────────────────────────────────────────────────────────
+// Returns USDC transfers on Base categorized by size.
+// ?min_amount=N  sets the floor in USD (default $10K, min $1K).
+// Categories auto-assign regardless of min_amount.
+
+const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+
+const WHALE_CATS = [
+  { key: "mega",  label: "Mega Whale",  min: 10_000_000, range: ">= $10M"        },
+  { key: "whale", label: "Whale",       min:  1_000_000, range: "$1M – $9.9M"    },
+  { key: "mid",   label: "Mid Whale",   min:    100_000, range: "$100K – $999K"  },
+  { key: "micro", label: "Micro Whale", min:     10_000, range: "$10K – $99K"    },
+] as const;
+type WhaleCatKey = typeof WHALE_CATS[number]["key"];
+
+function formatUsd(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000)     return `$${(n / 1_000).toFixed(1)}K`;
+  return `$${n.toFixed(0)}`;
+}
 
 trading.get("/whale-tracker", async (c) => {
   const env = c.get("env");
-  const thresholdRaw = c.req.query("threshold");
-  const threshold = thresholdRaw ? Math.max(10000, parseInt(thresholdRaw)) : WHALE_THRESHOLD;
-  const cacheKey = threshold === WHALE_THRESHOLD
-    ? "trading:whale-tracker"
-    : `trading:whale-tracker:${threshold}`;
+  const minRaw    = c.req.query("min_amount");
+  const minAmount = minRaw ? Math.max(1_000, parseInt(minRaw)) : 10_000;
+  const cacheKey  = `trading:whale-v2:${minAmount}`;
   try {
     const data = await getOrFetch(
       env.REDIS_URL, cacheKey,
-      () => fetchWhaleTransfers(env.BLOCKSCOUT_BASE_URL, threshold),
+      () => fetchWhaleTransfers(env.BLOCKSCOUT_BASE_URL, minAmount),
       { ttlSeconds: TTL.whaleTracks }
     );
     return c.json({ success: true, bundle: "trading_engine", data });
@@ -220,10 +237,7 @@ trading.get("/whale-tracker", async (c) => {
   }
 });
 
-const USDC_BASE       = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-const WHALE_THRESHOLD = 500_000; // USDC
-
-async function fetchWhaleTransfers(blockscoutBaseUrl: string, threshold = WHALE_THRESHOLD) {
+async function fetchWhaleTransfers(blockscoutBaseUrl: string, minAmount = 10_000) {
   const url =
     `${blockscoutBaseUrl}/api?module=account&action=tokentx` +
     `&contractaddress=${USDC_BASE}&sort=desc&offset=100&page=1`;
@@ -231,32 +245,50 @@ async function fetchWhaleTransfers(blockscoutBaseUrl: string, threshold = WHALE_
   const res  = await fetch(url, { headers: { Accept: "application/json" } });
   const json = (await res.json()) as { status: string; result?: Record<string, string>[] };
 
+  const emptyCats = () => Object.fromEntries(
+    WHALE_CATS.map(c => [c.key, { label: c.label, range: c.range, count: 0, transfers: [] as unknown[] }])
+  ) as Record<WhaleCatKey, { label: string; range: string; count: number; transfers: unknown[] }>;
+
   if (json.status !== "1" || !Array.isArray(json.result)) {
-    return {
-      source: "blockscout_base",
-      large_transfers: [],
-      threshold_usd: WHALE_THRESHOLD,
-      timestamp: Date.now(),
-    };
+    return { source: "blockscout_base", categories: emptyCats(), total: 0, min_tracked_usd: minAmount, timestamp: Date.now() };
   }
 
-  const whales = json.result
-    .filter((tx) => parseInt(tx.value ?? "0") / 1e6 >= threshold)
-    .slice(0, 25)
-    .map((tx) => ({
-      hash:         tx.hash,
-      from:         tx.from,
-      to:           tx.to,
-      amount_usdc:  parseInt(tx.value ?? "0") / 1e6,
+  const cats = emptyCats();
+  let total = 0;
+
+  for (const tx of json.result) {
+    const decimals = parseInt(tx.tokenDecimal ?? "6");
+    const amount   = parseInt(tx.value ?? "0") / Math.pow(10, decimals);
+    if (amount < minAmount) continue;
+
+    const cat = WHALE_CATS.find(c => amount >= c.min);
+    if (!cat) continue;
+
+    cats[cat.key].transfers.push({
+      hash:             tx.hash,
+      from:             tx.from,
+      to:               tx.to,
+      amount:           parseFloat(amount.toFixed(2)),
+      amount_formatted: formatUsd(amount),
+      token: {
+        symbol:   tx.tokenSymbol    ?? "USDC",
+        name:     tx.tokenName      ?? "USD Coin",
+        contract: tx.contractAddress ?? USDC_BASE,
+        decimals,
+      },
       block_number: parseInt(tx.blockNumber ?? "0"),
       age_seconds:  Math.floor(Date.now() / 1000) - parseInt(tx.timeStamp ?? "0"),
-    }));
+      category:     cat.key,
+    });
+    cats[cat.key].count++;
+    total++;
+  }
 
   return {
     source:          "blockscout_base",
-    large_transfers: whales,
-    total_found:     whales.length,
-    threshold_usd:   threshold,
+    categories:      cats,
+    total,
+    min_tracked_usd: minAmount,
     timestamp:       Date.now(),
   };
 }
@@ -351,7 +383,13 @@ trading.get("/gas-tracker", async (c) => {
   }
 });
 
-async function fetchGasPrices(baseRpcUrl: string, env?: { ETH_RPC_ALCHEMY?: string; ETH_RPC_QUICKNODE?: string; ETH_RPC_INFURA?: string }) {
+async function fetchGasPrices(
+  baseRpcUrl: string,
+  env?: {
+    ETH_RPC_ALCHEMY?: string; ETH_RPC_QUICKNODE?: string; ETH_RPC_INFURA?: string;
+    SOLANA_RPC_URL?: string;  HELIUS_API_KEY?: string;    ANKR_SOLANA_KEY?: string;
+  }
+) {
   const rpc = async (url: string, method: string, params: unknown[] = []) => {
     const r = await fetch(url, {
       method:  "POST",
@@ -362,8 +400,7 @@ async function fetchGasPrices(baseRpcUrl: string, env?: { ETH_RPC_ALCHEMY?: stri
     return ((await r.json()) as { result: unknown }).result;
   };
 
-  // ETH: paid providers first (authenticated, reliable), public fallbacks last.
-  // Server IP is often blocked by free public RPCs; paid providers are stable.
+  // ETH: paid providers first, public fallbacks last.
   const ETH_RPCS = [
     ...(env?.ETH_RPC_ALCHEMY   ? [env.ETH_RPC_ALCHEMY]   : []),
     ...(env?.ETH_RPC_QUICKNODE ? [env.ETH_RPC_QUICKNODE] : []),
@@ -379,10 +416,26 @@ async function fetchGasPrices(baseRpcUrl: string, env?: { ETH_RPC_ALCHEMY?: stri
     throw new Error("all ETH RPCs failed");
   };
 
+  // Solana: custom → Helius free → Ankr premium → Ankr public → mainnet-beta public.
+  // Helius free tier: 100k credits/day, reliable, no block on server IP.
+  const SOLANA_RPCS = [
+    ...(env?.SOLANA_RPC_URL  ? [env.SOLANA_RPC_URL]  : []),
+    ...(env?.HELIUS_API_KEY  ? [`https://mainnet.helius-rpc.com/?api-key=${env.HELIUS_API_KEY}`] : []),
+    ...(env?.ANKR_SOLANA_KEY ? [`https://rpc.ankr.com/solana/${env.ANKR_SOLANA_KEY}`] : []),
+    "https://rpc.ankr.com/solana",
+    "https://api.mainnet-beta.solana.com",
+  ];
+  const trySolanaRpc = async () => {
+    for (const url of SOLANA_RPCS) {
+      try { return await rpc(url, "getRecentPrioritizationFees", []); } catch { /* next */ }
+    }
+    throw new Error("all Solana RPCs failed");
+  };
+
   const [baseRes, ethRes, solRes] = await Promise.allSettled([
-    rpc(baseRpcUrl,                            "eth_feeHistory", ["0x5", "latest", [10, 50, 90]]),
+    rpc(baseRpcUrl, "eth_feeHistory", ["0x5", "latest", [10, 50, 90]]),
     tryEthRpc(),
-    rpc("https://api.mainnet-beta.solana.com", "getRecentPrioritizationFees", []),
+    trySolanaRpc(),
   ]);
 
   const parseEip1559 = (result: unknown) => {

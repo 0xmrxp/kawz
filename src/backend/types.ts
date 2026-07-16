@@ -19,6 +19,10 @@ export interface Env {
   ETH_RPC_ALCHEMY:    string;  // https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
   ETH_RPC_QUICKNODE:  string;  // https://xxx.quiknode.pro/xxx/
   ETH_RPC_INFURA:     string;  // https://mainnet.infura.io/v3/YOUR_KEY
+  // Solana RPC providers for gas-tracker (optional — public fallbacks used if empty)
+  SOLANA_RPC_URL:  string;  // custom primary, e.g. private node
+  HELIUS_API_KEY:  string;  // mainnet.helius-rpc.com free tier
+  ANKR_SOLANA_KEY: string;  // rpc.ankr.com/solana/{KEY} premium (optional)
   // Google Fact Check Tools API key (free, optional — fallback to LLM if empty)
   GOOGLE_FACTCHECK_API_KEY: string;
   // Ollama self-hosted LLM (primary inference engine)
@@ -62,6 +66,9 @@ export function loadEnv(): Env {
     ETH_RPC_ALCHEMY:   process.env.ETH_RPC_ALCHEMY   ?? "",
     ETH_RPC_QUICKNODE: process.env.ETH_RPC_QUICKNODE ?? "",
     ETH_RPC_INFURA:    process.env.ETH_RPC_INFURA    ?? "",
+    SOLANA_RPC_URL:    process.env.SOLANA_RPC_URL    ?? "",
+    HELIUS_API_KEY:    process.env.HELIUS_API_KEY     ?? "",
+    ANKR_SOLANA_KEY:   process.env.ANKR_SOLANA_KEY   ?? "",
     GOOGLE_FACTCHECK_API_KEY: process.env.GOOGLE_FACTCHECK_API_KEY ?? "",
     LLM_BASE_URL: process.env.LLM_BASE_URL ?? "http://localhost:11434",
     LLM_MODEL:    process.env.LLM_MODEL    ?? "qwen2.5:3b",
